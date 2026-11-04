@@ -131,7 +131,8 @@ fn parse_number(text : String) -> @lib.Address {
   if text.has_prefix("+") {
     @lib.Number(@lib.International, @lib.Isdn, text[1:].to_string())
   } else {
-    @lib.Number(@lib.Unknown, @lib.Isdn, text)
+    let (type_, plan, digits) = @lib.classify_digits(text)
+    @lib.Number(type_, plan, digits)
   }
 }
 

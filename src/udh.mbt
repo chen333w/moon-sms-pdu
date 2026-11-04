@@ -179,3 +179,48 @@ pub impl Show for UserDataHeader with fn to_string(self) {
   }
   "header[" + ids.join(",") + "]"
 }
+
+///|
+/// Assembles a header from explicit elements.
+pub fn UserDataHeader::new(elements : Array[HeaderElement]) -> UserDataHeader {
+  { elements }
+}
+
+///|
+/// Builds a single information element.
+pub fn HeaderElement::new(id : Int, data : Array[Byte]) -> HeaderElement {
+  { id, data }
+}
+
+///|
+/// Builds a port addressing element, choosing the 8-bit or 16-bit form.
+pub fn ports_header(ports : Ports) -> UserDataHeader raise SmsError {
+  guard ports.destination >= 0 && ports.source >= 0 else {
+    raise InvalidField("port number must not be negative")
+  }
+  if ports.destination <= 0xFF && ports.source <= 0xFF {
+    {
+      elements: [
+        {
+          id: iei_application_port_8bit,
+          data: [ports.destination.to_byte(), ports.source.to_byte()],
+        },
+      ],
+    }
+  } else {
+    guard ports.destination <= 0xFFFF && ports.source <= 0xFFFF else {
+      raise InvalidField("port number out of range")
+    }
+    {
+      elements: [
+        {
+          id: iei_application_port_16bit,
+          data: [
+            (ports.destination >> 8).to_byte(), (ports.destination & 0xFF).to_byte(),
+            (ports.source >> 8).to_byte(), (ports.source & 0xFF).to_byte(),
+          ],
+        },
+      ],
+    }
+  }
+}

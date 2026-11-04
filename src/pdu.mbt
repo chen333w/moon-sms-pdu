@@ -583,3 +583,26 @@ pub impl Show for Pdu with fn to_string(self) {
     StatusReport(_) => "SMS-STATUS-REPORT"
   }
 }
+
+///|
+/// Builds an SMS-DELIVER, which is mostly useful for test fixtures and for
+/// gateways that need to emit a delivery back to a modem.
+pub fn SmsDeliver::new(
+  originating : Address,
+  text : String,
+  encoding? : Encoding,
+) -> SmsDeliver {
+  {
+    originating,
+    service_center: None,
+    timestamp: timestamp_unchecked(2000, 1, 1, 0, 0, 0, 0),
+    encoding: encoding.unwrap_or(Gsm7),
+    text,
+    payload: [],
+    header: None,
+    concatenation: None,
+    no_more_messages: true,
+    status_report_indication: false,
+    reply_path: false,
+  }
+}

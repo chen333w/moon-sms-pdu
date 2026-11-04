@@ -34,31 +34,6 @@ pub(all) enum Address {
   Alphanumeric(String)
 } derive(Eq, @debug.Debug)
 
-///|
-/// Reads a BCD address field: `count` semi-octets of digits, plus the byte that
-/// carries type-of-address and length.
-fn read_number_digits(
-  octets : ArrayView[Byte],
-  pos : Int,
-  count : Int,
-  type_ : NumberType,
-) -> Address {
-  let buf = StringBuilder()
-  for i = 0; i < count; i = i + 1 {
-    let byte = octets[pos + i / 2].to_int()
-    let low = byte & 0xF
-    let high = (byte >> 4) & 0xF
-    buf.write_char(nibble_to_digit(low))
-    if i * 2 + 1 < count {
-      buf.write_char(nibble_to_digit(high))
-    }
-  }
-  if type_ == Alphanumeric {
-    let septets = gsm7_unpack(octets[pos:pos + (count + 1) / 2], count, 0)
-    return Alphanumeric(gsm7_from_septets(septets))
-  }
-  Number(type_, Unknown, buf.to_string())
-}
 
 ///|
 fn nibble_to_digit(n : Int) -> Char {
@@ -213,12 +188,14 @@ pub fn read_address(
   let type_ = number_type_of_bits((toa >> 4) & 0x7)
   let plan = numbering_plan_of_bits(toa & 0xF)
   if type_ == Alphanumeric {
-    let octet_len = (count + 1) / 2
+    // For an alphanumeric address the length octet counts septets, not
+    // semi-octets, and the body is a packed GSM 7-bit string.
+    let octet_len = (count * 7 + 7) / 8
     guard pos + 2 + octet_len <= octets.length() else {
       raise Truncated("alphanumeric address")
     }
-    let value = read_number_digits(octets, pos + 2, count, type_)
-    return (value, pos + 2 + octet_len)
+    let septets = gsm7_unpack(octets[pos + 2:pos + 2 + octet_len], count, 0)
+    return (Alphanumeric(gsm7_from_septets(septets)), pos + 2 + octet_len)
   }
   let octet_len = (count + 1) / 2
   guard pos + 2 + octet_len <= octets.length() else {
@@ -234,6 +211,23 @@ pub fn read_address(
 }
 
 ///|
+/// Picks a type and plan for a dialled number that arrived without a `+`.
+///
+/// A leading `00` is the international access code and a leading `0` a national
+/// trunk prefix, which is how modems and gateways expect raw digits to be
+/// classified. Anything else is treated as a national subscriber number, since
+/// assuming `Unknown` makes several networks reject the SUBMIT.
+pub fn classify_digits(digits : StringView) -> (NumberType, NumberingPlan, String) {
+  if digits.has_prefix("00") && digits.char_length() > 4 {
+    return (International, Isdn, digits[2:].to_string())
+  }
+  if digits.has_prefix("0") && digits.char_length() > 2 {
+    return (National, Isdn, digits[1:].to_string())
+  }
+  (National, Isdn, digits.to_string())
+}
+
+///|
 /// Formats an address for display: international numbers get a leading `+`.
 pub fn Address::to_string_display(self : Address) -> String {
   match self {
@@ -244,5 +238,41 @@ pub fn Address::to_string_display(self : Address) -> String {
         digits
       }
     Alphanumeric(text) => text
+  }
+}
+///|
+pub impl Show for Address with fn to_string(self) {
+  match self {
+    Number(type_, plan, digits) =>
+      "\{type_}/\{plan}: \{digits}"
+    Alphanumeric(text) => "alphanumeric: \{text}"
+  }
+}
+
+///|
+pub impl Show for NumberType with fn to_string(self) {
+  match self {
+    Unknown => "unknown"
+    International => "international"
+    National => "national"
+    NetworkSpecific => "network"
+    SubscriberNumber => "subscriber"
+    Alphanumeric => "alphanumeric"
+    Abbreviated => "abbreviated"
+    Reserved => "reserved"
+  }
+}
+
+///|
+pub impl Show for NumberingPlan with fn to_string(self) {
+  match self {
+    Unknown => "unknown"
+    Isdn => "isdn"
+    Data => "data"
+    Telex => "telex"
+    NationalNumberingPlan => "national-plan"
+    PrivateNumberingPlan => "private-plan"
+    Ermes => "ermes"
+    Reserved => "reserved"
   }
 }
