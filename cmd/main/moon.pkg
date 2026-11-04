@@ -1,0 +1,6 @@
+import {
+  "chen333w/moon-sms-pdu/src" @lib,
+  "moonbitlang/core/env",
+}
+
+pkgtype(kind: "executable")
