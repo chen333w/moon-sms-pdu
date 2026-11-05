@@ -36,6 +36,18 @@ fn main {
       } else {
         length_cmd(args[2])
       }
+    "summary" =>
+      if args.length() < 3 {
+        println("summary needs at least one hex pdu")
+      } else {
+        summary_cmd(args[2:].to_owned())
+      }
+    "stats" =>
+      if args.length() < 3 {
+        println("stats needs at least one hex pdu")
+      } else {
+        stats_cmd(args[2:].to_owned())
+      }
     "ussd" =>
       if args.length() < 3 {
         println("ussd needs a code, for example *100#")
@@ -57,6 +69,8 @@ fn print_usage() -> Unit {
   println("  encode <number> <text>    build an SMS-SUBMIT PDU")
   println("  parts <number> <text>     split a long message into PDUs")
   println("  length <text>             report part count and septet usage")
+  println("  summary <hex>...          one line per PDU")
+  println("  stats <hex>...            tally a batch of PDUs")
   println("  ussd <code>               encode a USSD string, for example *100#")
 }
 
@@ -234,5 +248,37 @@ fn ussd_cmd(code : String) -> Unit {
       println("encoding: \{message.encoding}")
     }
     Err(e) => println("encode failed: \{e.to_message()}")
+  }
+}
+
+///|
+/// Joins the remaining arguments into one capture-shaped text, so a caller can
+/// paste several PDUs or one whole list.
+fn collect(parts : Array[String]) -> String {
+  let buf = StringBuilder()
+  for part in parts {
+    buf.write_string(part)
+    buf.write_char('\n')
+  }
+  buf.to_string()
+}
+
+///|
+fn summary_cmd(parts : Array[String]) -> Unit {
+  let (pdus, errors) = @lib.parse_pdu_lines(collect(parts))
+  for pdu in pdus {
+    println(pdu.summary())
+  }
+  for error in errors {
+    println("!: \{error}")
+  }
+}
+
+///|
+fn stats_cmd(parts : Array[String]) -> Unit {
+  let (pdus, errors) = @lib.parse_pdu_lines(collect(parts))
+  println(@lib.stats_of(pdus).to_display())
+  if errors.length() > 0 {
+    println("\{errors.length()} line(s) could not be parsed")
   }
 }
