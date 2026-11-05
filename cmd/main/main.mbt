@@ -48,6 +48,12 @@ fn main {
       } else {
         stats_cmd(args[2:].to_owned())
       }
+    "verify" =>
+      if args.length() < 3 {
+        println("verify needs at least one hex pdu")
+      } else {
+        verify_cmd(args[2:].to_owned())
+      }
     "ussd" =>
       if args.length() < 3 {
         println("ussd needs a code, for example *100#")
@@ -71,6 +77,9 @@ fn print_usage() -> Unit {
   println("  length <text>             report part count and septet usage")
   println("  summary <hex>...          one line per PDU")
   println("  stats <hex>...            tally a batch of PDUs")
+  println(
+    "  verify <hex>...           re-encode each PDU and report differences",
+  )
   println("  ussd <code>               encode a USSD string, for example *100#")
 }
 
@@ -205,5 +214,17 @@ fn stats_cmd(parts : Array[String]) -> Unit {
   println(@lib.stats_of(pdus).to_display())
   if errors.length() > 0 {
     println("\{errors.length()} line(s) could not be parsed")
+  }
+}
+
+///|
+fn verify_cmd(parts : Array[String]) -> Unit {
+  let problems = @lib.audit_lines(collect(parts))
+  if problems.length() == 0 {
+    println("all pdus round-trip identically")
+  } else {
+    for problem in problems {
+      println(problem)
+    }
   }
 }
