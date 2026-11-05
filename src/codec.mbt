@@ -166,3 +166,18 @@ pub fn write_bytes_at(
     }
   }
 }
+
+///|
+/// Names a character for an error message, using the code point because the
+/// character itself may not survive whatever log it ends up in.
+pub fn describe_char(ch : Char) -> String {
+  let mut out = "U+"
+  let digits = "0123456789ABCDEF"
+  let mut shift = 12
+  while shift >= 0 {
+    out = out +
+      digits.get_char((ch.to_int() >> shift) & 0xF).unwrap().to_string()
+    shift = shift - 4
+  }
+  out
+}

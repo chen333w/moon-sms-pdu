@@ -228,3 +228,25 @@ fn hex4(value : Int32) -> String {
   }
   out
 }
+
+///|
+/// Character at a default-table position.
+fn gsm7_default_char(value : Int32) -> Char {
+  if value >= 0 && value < gsm7_default_table.length() {
+    gsm7_default_table[value]
+  } else {
+    '\u{FFFD}'
+  }
+}
+
+///|
+/// Character at an escaped position, falling back to the default table when the
+/// extension table leaves the slot undefined.
+fn gsm7_extension_char(next : Int32) -> Char {
+  for pair in gsm7_extension_table {
+    if pair.0 == next {
+      return pair.1
+    }
+  }
+  gsm7_default_char(next)
+}
