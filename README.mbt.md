@@ -91,8 +91,13 @@ moon run cmd/main -- decode 07911326040000F0040B911346610089F6000020806291731408
 moon run cmd/main -- encode '+8613800138000' 'Hello from MoonBit'
 moon run cmd/main -- parts  '+8613800138000' "$(cat long_message.txt)"
 moon run cmd/main -- length '一条比较长的短信……'
-moon run cmd/main -- ussd   '*100#'
+moon run cmd/main -- summary  <hex>...
+moon run cmd/main -- stats    <hex>...
+moon run cmd/main -- verify   <hex>...
+moon run cmd/main -- ussd     '*100#'
 ```
+
+`verify` 把每条报文解码再编码，逐字节比对，只列出不一致的行。
 
 `decode` 会打印重编码后的十六进制，可以直接和原报文对比。
 
@@ -114,7 +119,12 @@ PDU：
 - 相对有效期（分钟/天/周三档）与绝对有效期
 - TP-PID 四种分组：SMSC 分配、短消息类型、电传互通、SC 专有
 - 用户数据头：分段、端口寻址
+- 应用端口识别：WAP Push、MMS、设备管理、客户端配置、SIM 更新
 - 分段消息的切分、一次性重组，以及按到达顺序的流式重组（去重、过期、冲突拒绝）
+- 有效期截止时间计算与送达判定（准时 / 迟到 / 重试中 / 失败）
+- 时间戳与 Unix 秒互转
+- 号码归一化比较：`+86 138…`、`86138…`、`0138…`、`0086138…` 视为同一号码
+- 国家语言表：土耳其语、西班牙语、葡萄牙语，省掉 UCS-2 的一半开销
 - AT 指令：`AT+CMGF`、`AT+CMGS` 长度计算、`AT+CMGL` 响应解析、`AT+CMGD`、`AT+CUSD`
 
 ## 解码时的几处约定
@@ -137,13 +147,16 @@ PDU：
 **未定义的转义字符原样返回。** 0x1B 后面跟的码在扩展表里没有时，
 回退到默认表对应位置，不丢弃。
 
+**应用端口决定消息去向。** 2948 是 WAP Push，4996 是设备管理，两者都以八位组承载，
+把它们的字节当文本解会得到乱码。`SmsDeliver::application()` 给出归类。
+
 ## 测试
 
 ```bash
 moon test
 ```
 
-60 个测试，覆盖：
+104 个测试，覆盖：
 
 - 3GPP 文档中的荷兰运营商短信样本
 - 中英文混排往返
@@ -153,6 +166,11 @@ moon test
 - TP-PID 四组往返、SMS-COMMAND 五种命令类型
 - 乱序到达、重复片、过期、参考号冲突
 - AT+CMGL 两种响应格式
+- 有效期截止与准时/迟到判定
+- 五种号码写法互相匹配
+- 土耳其语字符表往返
+- 应用端口识别与八位组载荷
+- 解码后再编码逐字节一致
 - 畸形输入必须抛错
 
 ## 许可
