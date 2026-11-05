@@ -67,6 +67,7 @@ fn describe_pdu(pdu : @lib.Pdu) -> Unit {
       println("type:              SMS-SUBMIT")
       println("destination:       \{submit.destination.to_string_display()}")
       println("encoding:          \{submit.encoding}")
+      println("pid:               \{submit.pid}")
       match submit.class {
         Some(c) => println("class:             \{c}")
         None => ()
@@ -90,6 +91,7 @@ fn describe_pdu(pdu : @lib.Pdu) -> Unit {
       }
       println("time:              \{deliver.timestamp}")
       println("encoding:          \{deliver.encoding}")
+      println("pid:               \{deliver.pid}")
       match deliver.class {
         Some(c) => println("class:             \{c}")
         None => ()
@@ -128,6 +130,12 @@ fn describe_pdu(pdu : @lib.Pdu) -> Unit {
       println("sent:              \{report.timestamp}")
       println("discharged:        \{report.discharge_time}")
       println("status:            \{report.status}")
+    }
+    @lib.Command(command) => {
+      println("type:              SMS-COMMAND")
+      println("destination:       \{command.destination.to_string_display()}")
+      println("command:           \{command.command_type}")
+      println("target mr:         \{command.target_message_reference}")
     }
   }
 }

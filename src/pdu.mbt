@@ -35,6 +35,9 @@ pub(all) struct SmsSubmit {
   encoding : Encoding
   /// TP-DCS message class, when the caller wants one set.
   class : MessageClass?
+  /// TP-PID, for messages the network routes by protocol. Defaults to a plain
+  /// short message.
+  pid : ProtocolId
   text : String
   concatenation : Concatenation?
   /// Raw TP-UD used when `encoding` is `EightBit`.
@@ -59,6 +62,8 @@ pub(all) struct SmsDeliver {
   compressed : Bool
   /// Set for message-waiting indications.
   waiting : MessageWaiting?
+  /// TP-PID the SMSC used.
+  pid : ProtocolId
   text : String
   payload : Array[Byte]
   header : UserDataHeader?
@@ -83,11 +88,51 @@ pub(all) struct StatusReport {
 } derive(Eq, @debug.Debug)
 
 ///|
+/// What an SMS-COMMAND asks the SMSC to do with a stored message.
+pub(all) enum CommandType {
+  /// 000: make the SMSC read a message back.
+  ReadMessage
+  /// 001: delete a message.
+  DeleteMessage
+  /// 010: hand the message to a terminal that is not a handset.
+  MessageDeposit
+  /// 011: let the SMSC pick, which is what most senders use.
+  SubmitMessage
+  /// 100: query the SMSC's capabilities.
+  StatusEnquiry
+  /// 101..111: reserved, kept raw so an unknown code still round-trips.
+  Other(Int32)
+} derive(Eq, @debug.Debug)
+
+///|
+/// An SMS-COMMAND: TPDU type 10 with bit 1 clear.
+///
+/// It borrows the submit layout up to the message reference, then carries a
+/// command type and a little data describing the message it refers to.
+/// TP-VPF is always 00 here, so the 7-bit text behind it is not a message body
+/// but filler the sender put there.
+pub(all) struct SmsCommand {
+  message_reference : Int32
+  destination : Address
+  command_type : CommandType
+  /// TP-MR of the message the command refers to.
+  target_message_reference : Int32
+  pid : ProtocolId
+  encoding : Encoding
+  class : MessageClass?
+  text : String
+  payload : Array[Byte]
+  concatenation : Concatenation?
+  smsc : Address?
+} derive(Eq, @debug.Debug)
+
+///|
 /// Any TP-DU this codec can read.
 pub(all) enum Pdu {
   Submit(SmsSubmit)
   Deliver(SmsDeliver)
   StatusReport(StatusReport)
+  Command(SmsCommand)
 } derive(Eq, @debug.Debug)
 
 // ---------------------------------------------------------------------------
@@ -110,7 +155,15 @@ pub fn parse_octets(octets : ArrayView[Byte]) -> Pdu raise SmsError {
   match first & 0x3 {
     0 => Deliver(decode_deliver(octets, pos + 1, first, smsc))
     1 => Submit(decode_submit(octets, pos + 1, first, smsc))
-    2 => StatusReport(decode_status_report(octets, pos + 1, first, smsc))
+    2 =>
+      // Both kinds carry TPDU type 10. Bit 5 tells them apart: it is TP-SRQ on
+      // a status report and TP-SRR on a command, and status reports are the
+      // ones that set it.
+      if (first & 0x20) != 0 {
+        StatusReport(decode_status_report(octets, pos + 1, first, smsc))
+      } else {
+        Command(decode_command(octets, pos + 1, first, smsc))
+      }
     _ => raise InvalidField("reserved tpdu type")
   }
 }
@@ -155,7 +208,7 @@ fn decode_deliver(
   // flag, so it must not be read as header presence.
   let has_udh = (first & 0x40) != 0
   let (originating, pos) = read_address(octets, start)
-  let pid = need(octets, pos, "tp-pid")
+  let pid = decode_pid(need(octets, pos, "tp-pid"))
   let dcs = need(octets, pos + 1, "tp-dcs")
   let timestamp = read_timestamp(octets, pos + 2)
   let udl = need(octets, pos + 9, "tp-udl")
@@ -177,6 +230,7 @@ fn decode_deliver(
     class: scheme.class,
     compressed: scheme.compressed,
     waiting: scheme.waiting,
+    pid,
     text,
     payload,
     header,
@@ -202,7 +256,7 @@ fn decode_submit(
   let message_reference = need(octets, start, "tp-mr")
   let (destination, address_end) = read_address(octets, start + 1)
   let mut pos = address_end
-  let _ = need(octets, pos, "tp-pid")
+  let pid = decode_pid(need(octets, pos, "tp-pid"))
   let dcs = need(octets, pos + 1, "tp-dcs")
   pos = pos + 2
   let validity = match vpf {
@@ -237,6 +291,7 @@ fn decode_submit(
     validity,
     encoding,
     class: decode_dcs(dcs).class,
+    pid,
     text,
     concatenation: match header {
       Some(h) => h.concatenation()
@@ -366,6 +421,7 @@ pub fn SmsSubmit::new(
     validity: Default,
     encoding: encoding.unwrap_or(Gsm7),
     class: None,
+    pid: MessageType(ShortMessage),
     text,
     concatenation: None,
     payload: [],
@@ -383,6 +439,7 @@ pub fn Pdu::to_octets(self : Pdu) -> Array[Byte] raise SmsError {
     Submit(submit) => submit.to_octets()
     Deliver(deliver) => deliver.to_octets()
     StatusReport(report) => report.to_octets()
+    Command(command) => command.to_octets()
   }
 }
 
@@ -413,7 +470,7 @@ pub fn SmsSubmit::to_octets(self : SmsSubmit) -> Array[Byte] raise SmsError {
   out.push(first.to_byte())
   out.push((self.message_reference & 0xFF).to_byte())
   out.append(self.destination.to_octets())
-  out.push(b'\x00') // TP-PID: SME-to-SME protocol, no interworking
+  out.push(encode_pid(self.pid))
   out.push(encode_dcs(self.encoding, class?=self.class))
   // Absolute validity needs the timestamp before the text is packed.
   match self.validity {
@@ -450,7 +507,7 @@ pub fn SmsDeliver::to_octets(self : SmsDeliver) -> Array[Byte] raise SmsError {
     (if self.reply_path { 0x80 } else { 0 })
   out.push(first.to_byte())
   out.append(self.originating.to_octets())
-  out.push(b'\x00')
+  out.push(encode_pid(self.pid))
   out.push(encode_dcs(self.encoding, class?=self.class))
   out.append(self.timestamp.to_octets())
   let (ud, udl) = encode_user_data(
@@ -626,6 +683,19 @@ pub impl Show for Pdu with fn to_string(self) {
     Submit(_) => "SMS-SUBMIT"
     Deliver(_) => "SMS-DELIVER"
     StatusReport(_) => "SMS-STATUS-REPORT"
+    Command(_) => "SMS-COMMAND"
+  }
+}
+
+///|
+pub impl Show for CommandType with fn to_string(self) {
+  match self {
+    ReadMessage => "read message"
+    DeleteMessage => "delete message"
+    MessageDeposit => "message deposit"
+    SubmitMessage => "submit message"
+    StatusEnquiry => "status enquiry"
+    Other(code) => "command (\{code})"
   }
 }
 
@@ -645,6 +715,7 @@ pub fn SmsDeliver::new(
     class: None,
     compressed: false,
     waiting: None,
+    pid: MessageType(ShortMessage),
     text,
     payload: [],
     header: None,
@@ -653,4 +724,121 @@ pub fn SmsDeliver::new(
     status_report_indication: false,
     reply_path: false,
   }
+}
+
+///|
+/// Decodes an SMS-COMMAND. Layout past TP-MR mirrors the submit, except that
+/// the third octet is a command type rather than a validity period and the
+/// message reference comes before TP-PID.
+fn decode_command(
+  octets : ArrayView[Byte],
+  start : Int32,
+  first : Int32,
+  smsc : Address?,
+) -> SmsCommand raise SmsError {
+  let has_udh = (first & 0x40) != 0
+  let message_reference = need(octets, start, "tp-mr")
+  let (destination, address_end) = read_address(octets, start + 1)
+  let command_type = decode_command_type(need(octets, address_end, "tp-ct"))
+  let target = need(octets, address_end + 1, "tp-mn")
+  let pid = decode_pid(need(octets, address_end + 2, "tp-pid"))
+  let dcs = need(octets, address_end + 3, "tp-dcs")
+  let udl = need(octets, address_end + 4, "tp-udl")
+  let scheme = decode_dcs(dcs)
+  let (text, payload, header) = decode_user_data(
+    octets,
+    address_end + 5,
+    udl,
+    has_udh,
+    scheme.encoding,
+  )
+  {
+    message_reference,
+    destination,
+    command_type,
+    target_message_reference: target,
+    pid,
+    encoding: scheme.encoding,
+    class: scheme.class,
+    text,
+    payload,
+    concatenation: match header {
+      Some(h) => h.concatenation()
+      None => None
+    },
+    smsc,
+  }
+}
+
+///|
+fn decode_command_type(value : Int32) -> CommandType {
+  match (value >> 5) & 0x7 {
+    0 => ReadMessage
+    1 => DeleteMessage
+    2 => MessageDeposit
+    3 => SubmitMessage
+    4 => StatusEnquiry
+    other => Other(other)
+  }
+}
+
+///|
+fn encode_command_type(kind : CommandType) -> Byte {
+  ((match kind {
+    ReadMessage => 0
+    DeleteMessage => 1
+    MessageDeposit => 2
+    SubmitMessage => 3
+    StatusEnquiry => 4
+    Other(code) => code & 0x7
+  }) <<
+  5).to_byte()
+}
+
+///|
+/// Builds a command that deletes a stored message, which is the shape most
+/// callers reach for.
+pub fn SmsCommand::delete(destination : Address, target : Int32) -> SmsCommand {
+  {
+    message_reference: 0,
+    destination,
+    command_type: DeleteMessage,
+    target_message_reference: target,
+    pid: MessageType(ShortMessage),
+    encoding: Gsm7,
+    class: None,
+    text: "",
+    payload: [],
+    concatenation: None,
+    smsc: None,
+  }
+}
+
+///|
+/// Encodes an SMS-COMMAND.
+pub fn SmsCommand::to_octets(self : SmsCommand) -> Array[Byte] raise SmsError {
+  let out : Array[Byte] = []
+  append_smsc(out, self.smsc)
+  let has_udh = !(self.concatenation is None)
+  let first = 0x02 | (if has_udh { 0x40 } else { 0 })
+  out.push(first.to_byte())
+  out.push((self.message_reference & 0xFF).to_byte())
+  out.append(self.destination.to_octets())
+  out.push(encode_command_type(self.command_type))
+  out.push((self.target_message_reference & 0xFF).to_byte())
+  out.push(encode_pid(self.pid))
+  out.push(encode_dcs(self.encoding, class?=self.class))
+  let header = match self.concatenation {
+    Some(concat) => Some(concatenation_header(concat))
+    None => None
+  }
+  let (ud, udl) = encode_user_data(
+    self.encoding,
+    self.text,
+    self.payload,
+    header,
+  )
+  out.push(udl.to_byte())
+  out.append(ud)
+  out
 }

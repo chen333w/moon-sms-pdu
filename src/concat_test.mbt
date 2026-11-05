@@ -80,6 +80,7 @@ test "assembly waits for every part and ignores duplicates" {
       class: None,
       compressed: false,
       waiting: None,
+      pid: @src.MessageType(@src.ShortMessage),
       text: "part\{sequence}",
       payload: [],
       header: None,
