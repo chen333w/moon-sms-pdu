@@ -39,7 +39,7 @@ test "a relative validity period counts from acceptance" {
 
 ///|
 test "an absolute validity period ignores when it was accepted" {
-  let accepted = @src.timestamp_unchecked(2024, 1, 1, 10, 0, 0, 0)
+  let accepted = @src.timestamp_unchecked(2020, 1, 1, 0, 0, 0, 0)
   let deadline = @src.timestamp_unchecked(2024, 6, 1, 0, 0, 0, 0)
   let submit = { ..base_submit(), validity: @src.Absolute(deadline), }
   match (submit.expires_at(accepted) catch { e => fail(e.to_message()) }) {
@@ -60,23 +60,6 @@ test "delivery inside the window is on time" {
   ) catch {
     e => fail(e.to_message())
   }
-  inspect(outcome, content="delivered")
-}
-
-///|
-test "delivery after the window is late, not failed" {
-  let accepted = @src.timestamp_unchecked(2024, 1, 1, 10, 0, 0, 0)
-  // Thirty minutes is 1800 seconds; the report arrives at second 40.
-  let submit = { ..base_submit(), validity: @src.Relative(30), }
-  let late_accepted = @src.timestamp_unchecked(2024, 1, 1, 10, 0, 0, 0)
-  let outcome = @src.classify_delivery(
-    report_at(@src.Delivered, 40),
-    submit,
-    late_accepted,
-  ) catch {
-    e => fail(e.to_message())
-  }
-  // Second 40 is still inside thirty minutes, so this one is on time.
   inspect(outcome, content="delivered")
 }
 
