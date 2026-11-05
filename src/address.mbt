@@ -34,23 +34,22 @@ pub(all) enum Address {
   Alphanumeric(String)
 } derive(Eq, @debug.Debug)
 
-
 ///|
-fn nibble_to_digit(n : Int) -> Char {
+fn nibble_to_digit(n : Int32) -> Char {
   match n {
     0xA => '*'
     0xB => '#'
     0xC => 'a'
     0xD => 'b'
     0xE => 'c'
-    _ => Int::unsafe_to_char('0'.to_int() + n)
+    _ => Int32::unsafe_to_char('0'.to_int() + n)
   }
 }
 
 ///|
-fn digit_to_nibble(ch : Char) -> Int? {
+fn digit_to_nibble(ch : Char) -> Int32? {
   match ch {
-    '0'..='9' => Some(ch.to_int() - '0'.to_int())
+    '0'..<='9' => Some(ch.to_int() - '0'.to_int())
     '*' => Some(0xA)
     '#' => Some(0xB)
     'a' => Some(0xC)
@@ -87,7 +86,7 @@ fn encode_number_digits(digits : StringView) -> Array[Byte] raise SmsError {
 
 ///|
 /// Semi-octet count of a digit string.
-fn digit_count(digits : StringView) -> Int {
+fn digit_count(digits : StringView) -> Int32 {
   digits.char_length()
 }
 
@@ -99,11 +98,11 @@ pub fn Address::to_octets(self : Address) -> Array[Byte] raise SmsError {
       guard type_ != Alphanumeric && type_ != Reserved else {
         raise InvalidField("number type for a BCD address")
       }
-      let toa = (0x80
-      | (number_type_bits(type_) << 4)
-      | numbering_plan_bits(plan)).to_byte()
+      let toa = (0x80 |
+      (number_type_bits(type_) << 4) |
+      numbering_plan_bits(plan)).to_byte()
       let body = encode_number_digits(digits)
-      let out : Array[Byte] = [ (digit_count(digits).to_byte()), toa ]
+      let out : Array[Byte] = [digit_count(digits).to_byte(), toa]
       out.append(body)
       out
     }
@@ -111,7 +110,7 @@ pub fn Address::to_octets(self : Address) -> Array[Byte] raise SmsError {
       let septets = gsm7_to_septets(text)
       let octets = gsm7_pack(septets, 0)
       let toa = (0x80 | (number_type_bits(Alphanumeric) << 4)).to_byte()
-      let out : Array[Byte] = [ (septets.length().to_byte()), toa ]
+      let out : Array[Byte] = [septets.length().to_byte(), toa]
       out.append(octets)
       out
     }
@@ -119,7 +118,7 @@ pub fn Address::to_octets(self : Address) -> Array[Byte] raise SmsError {
 }
 
 ///|
-fn number_type_bits(type_ : NumberType) -> Int {
+fn number_type_bits(type_ : NumberType) -> Int32 {
   match type_ {
     Unknown => 0
     International => 1
@@ -133,7 +132,7 @@ fn number_type_bits(type_ : NumberType) -> Int {
 }
 
 ///|
-fn number_type_of_bits(bits : Int) -> NumberType {
+fn number_type_of_bits(bits : Int32) -> NumberType {
   match bits {
     0 => Unknown
     1 => International
@@ -147,7 +146,7 @@ fn number_type_of_bits(bits : Int) -> NumberType {
 }
 
 ///|
-fn numbering_plan_bits(plan : NumberingPlan) -> Int {
+fn numbering_plan_bits(plan : NumberingPlan) -> Int32 {
   match plan {
     Unknown => 0
     Isdn => 1
@@ -161,7 +160,7 @@ fn numbering_plan_bits(plan : NumberingPlan) -> Int {
 }
 
 ///|
-fn numbering_plan_of_bits(bits : Int) -> NumberingPlan {
+fn numbering_plan_of_bits(bits : Int32) -> NumberingPlan {
   match bits {
     1 => Isdn
     3 => Data
@@ -179,8 +178,8 @@ fn numbering_plan_of_bits(bits : Int) -> NumberingPlan {
 /// offset just past it.
 pub fn read_address(
   octets : ArrayView[Byte],
-  pos : Int,
-) -> (Address, Int) raise SmsError {
+  pos : Int32,
+) -> (Address, Int32) raise SmsError {
   guard pos < octets.length() else { raise Truncated("address length") }
   let count = octets[pos].to_int()
   guard pos + 1 < octets.length() else { raise Truncated("address type") }
@@ -217,14 +216,16 @@ pub fn read_address(
 /// trunk prefix, which is how modems and gateways expect raw digits to be
 /// classified. Anything else is treated as a national subscriber number, since
 /// assuming `Unknown` makes several networks reject the SUBMIT.
-pub fn classify_digits(digits : StringView) -> (NumberType, NumberingPlan, String) {
+pub fn classify_digits(
+  digits : StringView,
+) -> (NumberType, NumberingPlan, String) {
   if digits.has_prefix("00") && digits.char_length() > 4 {
-    return (International, Isdn, digits[2:].to_string())
+    return (International, Isdn, digits[2:].to_owned())
   }
   if digits.has_prefix("0") && digits.char_length() > 2 {
-    return (National, Isdn, digits[1:].to_string())
+    return (National, Isdn, digits[1:].to_owned())
   }
-  (National, Isdn, digits.to_string())
+  (National, Isdn, digits.to_owned())
 }
 
 ///|
@@ -240,11 +241,11 @@ pub fn Address::to_string_display(self : Address) -> String {
     Alphanumeric(text) => text
   }
 }
+
 ///|
 pub impl Show for Address with fn to_string(self) {
   match self {
-    Number(type_, plan, digits) =>
-      "\{type_}/\{plan}: \{digits}"
+    Number(type_, plan, digits) => "\{type_}/\{plan}: \{digits}"
     Alphanumeric(text) => "alphanumeric: \{text}"
   }
 }

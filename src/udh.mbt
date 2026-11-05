@@ -1,7 +1,7 @@
 ///|
 /// One Information Element of a user data header.
 pub(all) struct HeaderElement {
-  id : Int
+  id : Int32
   data : Array[Byte]
 } derive(Eq, @debug.Debug)
 
@@ -13,33 +13,33 @@ pub(all) struct UserDataHeader {
 
 ///|
 /// Concatenation element with an 8-bit reference.
-pub let iei_concatenated_8bit : Int = 0x00
+pub let iei_concatenated_8bit : Int32 = 0x00
 
 ///|
 /// Concatenation element with a 16-bit reference.
-pub let iei_concatenated_16bit : Int = 0x08
+pub let iei_concatenated_16bit : Int32 = 0x08
 
 ///|
 /// Application port addressing, 8-bit ports.
-pub let iei_application_port_8bit : Int = 0x04
+pub let iei_application_port_8bit : Int32 = 0x04
 
 ///|
 /// Application port addressing, 16-bit ports.
-pub let iei_application_port_16bit : Int = 0x05
+pub let iei_application_port_16bit : Int32 = 0x05
 
 ///|
 /// Where a part sits in a multi-part message.
 pub(all) struct Concatenation {
-  reference : Int
-  total : Int
-  sequence : Int
+  reference : Int32
+  total : Int32
+  sequence : Int32
 } derive(Eq, @debug.Debug)
 
 ///|
 /// Application port pair, as used by OTA provisioning and WAP push.
 pub(all) struct Ports {
-  destination : Int
-  source : Int
+  destination : Int32
+  source : Int32
 } derive(Eq, @debug.Debug)
 
 ///|
@@ -47,7 +47,7 @@ pub(all) struct Ports {
 /// octets it occupies, including its own length octet.
 pub fn UserDataHeader::parse(
   octets : ArrayView[Byte],
-) -> (UserDataHeader, Int) raise SmsError {
+) -> (UserDataHeader, Int32) raise SmsError {
   guard octets.length() >= 1 else { raise Truncated("user data header") }
   let length = octets[0].to_int()
   guard length >= 1 else { raise InvalidField("empty user data header") }
@@ -65,7 +65,7 @@ pub fn UserDataHeader::parse(
     guard pos + 2 + data_len <= 1 + length else {
       raise BadLength("information element overruns the header")
     }
-    elements.push({ id, data: octets[pos + 2:pos + 2 + data_len].to_owned() })
+    elements.push({ id, data: octets[pos + 2:pos + 2 + data_len].to_owned(), })
     pos = pos + 2 + data_len
   }
   ({ elements, }, length + 1)
@@ -80,7 +80,7 @@ pub fn UserDataHeader::to_octets(self : UserDataHeader) -> Array[Byte] {
     body.push(element.data.length().to_byte())
     body.append(element.data)
   }
-  let out : Array[Byte] = [ body.length().to_byte() ]
+  let out : Array[Byte] = [body.length().to_byte()]
   out.append(body)
   out
 }
@@ -136,7 +136,8 @@ pub fn concatenation_header(
   guard concatenation.total >= 1 && concatenation.total <= 255 else {
     raise InvalidField("concatenation total out of range")
   }
-  guard concatenation.sequence >= 1 && concatenation.sequence <= concatenation.total else {
+  guard concatenation.sequence >= 1 &&
+    concatenation.sequence <= concatenation.total else {
     raise InvalidField("concatenation sequence out of range")
   }
   if concatenation.reference >= 0 && concatenation.reference <= 0xFF {
@@ -145,7 +146,8 @@ pub fn concatenation_header(
         {
           id: iei_concatenated_8bit,
           data: [
-            concatenation.reference.to_byte(), concatenation.total.to_byte(),
+            concatenation.reference.to_byte(),
+            concatenation.total.to_byte(),
             concatenation.sequence.to_byte(),
           ],
         },
@@ -159,13 +161,15 @@ pub fn concatenation_header(
           data: [
             ((concatenation.reference >> 8) & 0xFF).to_byte(),
             (concatenation.reference & 0xFF).to_byte(),
-            concatenation.total.to_byte(), concatenation.sequence.to_byte(),
+            concatenation.total.to_byte(),
+            concatenation.sequence.to_byte(),
           ],
         },
       ],
     }
   }
 }
+
 ///|
 pub impl Show for Concatenation with fn to_string(self) {
   "\{self.sequence}/\{self.total} ref \{self.reference}"
@@ -183,13 +187,13 @@ pub impl Show for UserDataHeader with fn to_string(self) {
 ///|
 /// Assembles a header from explicit elements.
 pub fn UserDataHeader::new(elements : Array[HeaderElement]) -> UserDataHeader {
-  { elements }
+  { elements, }
 }
 
 ///|
 /// Builds a single information element.
-pub fn HeaderElement::new(id : Int, data : Array[Byte]) -> HeaderElement {
-  { id, data }
+pub fn HeaderElement::new(id : Int32, data : Array[Byte]) -> HeaderElement {
+  { id, data, }
 }
 
 ///|
@@ -216,8 +220,10 @@ pub fn ports_header(ports : Ports) -> UserDataHeader raise SmsError {
         {
           id: iei_application_port_16bit,
           data: [
-            (ports.destination >> 8).to_byte(), (ports.destination & 0xFF).to_byte(),
-            (ports.source >> 8).to_byte(), (ports.source & 0xFF).to_byte(),
+            (ports.destination >> 8).to_byte(),
+            (ports.destination & 0xFF).to_byte(),
+            (ports.source >> 8).to_byte(),
+            (ports.source & 0xFF).to_byte(),
           ],
         },
       ],

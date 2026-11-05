@@ -3,7 +3,7 @@
 ///
 /// With a six octet concatenation header the GSM 7-bit part holds 153 septets,
 /// UCS-2 holds 67 code units and 8-bit payloads hold 134 octets.
-pub fn part_capacity(encoding : Encoding) -> Int {
+pub fn part_capacity(encoding : Encoding) -> Int32 {
   match encoding {
     Gsm7 => 153
     Ucs2 => 134
@@ -13,7 +13,7 @@ pub fn part_capacity(encoding : Encoding) -> Int {
 
 ///|
 /// Capacity of a single, un-concatenated message.
-pub fn single_capacity(encoding : Encoding) -> Int {
+pub fn single_capacity(encoding : Encoding) -> Int32 {
   match encoding {
     Gsm7 => 160
     Ucs2 => 140
@@ -26,7 +26,10 @@ pub fn single_capacity(encoding : Encoding) -> Int {
 ///
 /// Splitting happens on character boundaries, never inside an escaped GSM 7-bit
 /// character, and never inside a surrogate pair.
-pub fn split_text(text : StringView, encoding : Encoding) -> Array[String] raise SmsError {
+pub fn split_text(
+  text : StringView,
+  encoding : Encoding,
+) -> Array[String] raise SmsError {
   let limit = part_capacity(encoding)
   let parts : Array[String] = []
   let current = StringBuilder()
@@ -37,7 +40,15 @@ pub fn split_text(text : StringView, encoding : Encoding) -> Array[String] raise
         guard gsm7_is_encodable(ch.to_string()) else {
           raise NotEncodable("U+" + ch.to_int().to_string())
         }
-        if ch == '{' || ch == '}' || ch == '\\' || ch == '[' || ch == ']' || ch == '~' || ch == '|' || ch == '^' || ch == '€' {
+        if ch == '{' ||
+          ch == '}' ||
+          ch == '\\' ||
+          ch == '[' ||
+          ch == ']' ||
+          ch == '~' ||
+          ch == '|' ||
+          ch == '^' ||
+          ch == '€' {
           2
         } else {
           1
@@ -70,7 +81,7 @@ pub fn split_text(text : StringView, encoding : Encoding) -> Array[String] raise
 pub fn build_submits(
   destination : Address,
   text : String,
-  reference : Int,
+  reference : Int32,
   encoding? : Encoding,
 ) -> Array[SmsSubmit] raise SmsError {
   let encoding = encoding.unwrap_or(Gsm7)

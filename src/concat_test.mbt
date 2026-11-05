@@ -6,7 +6,7 @@ test "a short message stays in one part with no header" {
     1,
   )
   inspect(submits.length(), content="1")
-  inspect(submits[0].concatenation, content="None")
+  inspect(submits[0].concatenation is None, content="true")
 }
 
 ///|
@@ -71,27 +71,31 @@ test "ucs2 parts stop on code point boundaries" {
 
 ///|
 test "assembly waits for every part and ignores duplicates" {
-  let make = fn(sequence : Int) -> @src.SmsDeliver {
+  let make = fn(sequence : Int32) -> @src.SmsDeliver {
     {
       originating: @src.Number(@src.International, @src.Isdn, "8613800138000"),
       service_center: None,
       timestamp: @src.timestamp_unchecked(2024, 1, 1, 0, 0, 0, 0),
       encoding: @src.Gsm7,
+      class: None,
+      compressed: false,
+      waiting: None,
       text: "part\{sequence}",
       payload: [],
       header: None,
-      concatenation: Some({ reference: 1, total: 3, sequence }),
+      concatenation: Some({ reference: 1, total: 3, sequence, }),
       no_more_messages: true,
       status_report_indication: false,
       reply_path: false,
     }
   }
-  inspect(@src.assemble([make(2), make(1)]), content="None")
+  inspect(@src.assemble([make(2), make(1)]) is None, content="true")
   inspect(
-    @src.assemble([make(2), make(1), make(3), make(2)]),
-    content="Some(part1part2part3)",
+    @src.assemble([make(2), make(1), make(3), make(2)]).unwrap(),
+    content="part1part2part3",
   )
 }
+
 ///|
 test "a concatenated part survives encode and decode byte for byte" {
   let text = "The quick brown fox jumps over the lazy dog. ".repeat(8)

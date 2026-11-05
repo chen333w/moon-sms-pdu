@@ -4,9 +4,9 @@ pub(all) enum ValidityPeriod {
   /// Let the SMSC apply its own default.
   Default
   /// Duration in minutes, expressed in the relative format.
-  Relative(Int)
+  Relative(Int32)
   /// Raw relative octet, kept verbatim so a decode can re-encode byte for byte.
-  RelativeRaw(Int)
+  RelativeRaw(Int32)
   /// Absolute timestamp.
   Absolute(Timestamp)
 } derive(Eq, @debug.Debug)
@@ -17,22 +17,24 @@ pub(all) enum StatusReportStatus {
   /// 0x00: delivered.
   Delivered
   /// 0x01..0x1F: still being retried.
-  TemporaryError(Int)
+  TemporaryError(Int32)
   /// 0x20..0x3F: retries exhausted.
-  PermanentError(Int)
+  PermanentError(Int32)
   /// 0x40..0x7F: temporary failure of a type the SMSC did not classify.
-  TemporaryUnknown(Int)
+  TemporaryUnknown(Int32)
   /// 0x80..: codes the standard leaves to the protocol, kept raw.
-  Other(Int)
+  Other(Int32)
 } derive(Eq, @debug.Debug)
 
 ///|
 /// An SMS-SUBMIT: a message on its way to the SMSC.
 pub(all) struct SmsSubmit {
-  message_reference : Int
+  message_reference : Int32
   destination : Address
   validity : ValidityPeriod
   encoding : Encoding
+  /// TP-DCS message class, when the caller wants one set.
+  class : MessageClass?
   text : String
   concatenation : Concatenation?
   /// Raw TP-UD used when `encoding` is `EightBit`.
@@ -51,6 +53,12 @@ pub(all) struct SmsDeliver {
   service_center : Address?
   timestamp : Timestamp
   encoding : Encoding
+  /// Message class the SMSC set, if any. Class 0 means flash SMS.
+  class : MessageClass?
+  /// Set when the SMSC flagged the user data as compressed.
+  compressed : Bool
+  /// Set for message-waiting indications.
+  waiting : MessageWaiting?
   text : String
   payload : Array[Byte]
   header : UserDataHeader?
@@ -64,7 +72,7 @@ pub(all) struct SmsDeliver {
 ///|
 /// An SMS-STATUS-REPORT.
 pub(all) struct StatusReport {
-  message_reference : Int
+  message_reference : Int32
   recipient : Address
   service_center : Address?
   timestamp : Timestamp
@@ -109,7 +117,10 @@ pub fn parse_octets(octets : ArrayView[Byte]) -> Pdu raise SmsError {
 
 ///|
 /// Reads the SMSC address that prefixes every PDU.
-fn read_smsc(octets : ArrayView[Byte], pos : Int) -> (Address?, Int) raise SmsError {
+fn read_smsc(
+  octets : ArrayView[Byte],
+  pos : Int32,
+) -> (Address?, Int32) raise SmsError {
   guard pos < octets.length() else { raise Truncated("smsc length") }
   let length = octets[pos].to_int()
   if length == 0 {
@@ -126,7 +137,7 @@ fn read_smsc(octets : ArrayView[Byte], pos : Int) -> (Address?, Int) raise SmsEr
     let byte = octets[pos + 2 + i / 2].to_int()
     let nibble = if i % 2 == 0 { byte & 0xF } else { (byte >> 4) & 0xF }
     let is_padding = i == digit_semi - 1 && nibble == 0xF
-    if not(is_padding) {
+    if !is_padding {
       buf.write_char(nibble_to_digit(nibble))
     }
   }
@@ -136,8 +147,8 @@ fn read_smsc(octets : ArrayView[Byte], pos : Int) -> (Address?, Int) raise SmsEr
 ///|
 fn decode_deliver(
   octets : ArrayView[Byte],
-  start : Int,
-  first : Int,
+  start : Int32,
+  first : Int32,
   smsc : Address?,
 ) -> SmsDeliver raise SmsError {
   // TP-UDHI is bit 6. Bit 5 of the deliver type octet is TP-SRI, a different
@@ -148,9 +159,14 @@ fn decode_deliver(
   let dcs = need(octets, pos + 1, "tp-dcs")
   let timestamp = read_timestamp(octets, pos + 2)
   let udl = need(octets, pos + 9, "tp-udl")
-  let encoding = encoding_of_dcs(dcs)
+  let scheme = decode_dcs(dcs)
+  let encoding = scheme.encoding
   let (text, payload, header) = decode_user_data(
-    octets, pos + 10, udl, has_udh, encoding,
+    octets,
+    pos + 10,
+    udl,
+    has_udh,
+    encoding,
   )
   let _ = pid
   {
@@ -158,6 +174,9 @@ fn decode_deliver(
     service_center: smsc,
     timestamp,
     encoding,
+    class: scheme.class,
+    compressed: scheme.compressed,
+    waiting: scheme.waiting,
     text,
     payload,
     header,
@@ -174,8 +193,8 @@ fn decode_deliver(
 ///|
 fn decode_submit(
   octets : ArrayView[Byte],
-  start : Int,
-  first : Int,
+  start : Int32,
+  first : Int32,
   smsc : Address?,
 ) -> SmsSubmit raise SmsError {
   let has_udh = (first & 0x40) != 0
@@ -206,13 +225,18 @@ fn decode_submit(
   let udl = need(octets, pos, "tp-udl")
   let encoding = encoding_of_dcs(dcs)
   let (text, payload, header) = decode_user_data(
-    octets, pos + 1, udl, has_udh, encoding,
+    octets,
+    pos + 1,
+    udl,
+    has_udh,
+    encoding,
   )
   {
     message_reference,
     destination,
     validity,
     encoding,
+    class: decode_dcs(dcs).class,
     text,
     concatenation: match header {
       Some(h) => h.concatenation()
@@ -229,8 +253,8 @@ fn decode_submit(
 ///|
 fn decode_status_report(
   octets : ArrayView[Byte],
-  start : Int,
-  first : Int,
+  start : Int32,
+  first : Int32,
   smsc : Address?,
 ) -> StatusReport raise SmsError {
   let message_reference = need(octets, start, "tp-mr")
@@ -251,7 +275,7 @@ fn decode_status_report(
 }
 
 ///|
-fn status_of_code(code : Int) -> StatusReportStatus {
+fn status_of_code(code : Int32) -> StatusReportStatus {
   if code == 0 {
     Delivered
   } else if code <= 0x1F {
@@ -269,8 +293,8 @@ fn status_of_code(code : Int) -> StatusReportStatus {
 /// Decodes TP-UD into text, raw payload and the optional header.
 fn decode_user_data(
   octets : ArrayView[Byte],
-  pos : Int,
-  udl : Int,
+  pos : Int32,
+  udl : Int32,
   has_udh : Bool,
   encoding : Encoding,
 ) -> (String, Array[Byte], UserDataHeader?) raise SmsError {
@@ -288,7 +312,8 @@ fn decode_user_data(
       let raw_header = octets[pos:pos + header_octets]
       let (header, consumed) = UserDataHeader::parse(raw_header)
       let septets = gsm7_unpack(
-        octets[pos + consumed:pos + header_octets + body_octets], body_septets,
+        octets[pos + consumed:pos + header_octets + body_octets],
+        body_septets,
         0,
       )
       (gsm7_from_septets(septets), [], Some(header))
@@ -340,6 +365,7 @@ pub fn SmsSubmit::new(
     destination,
     validity: Default,
     encoding: encoding.unwrap_or(Gsm7),
+    class: None,
     text,
     concatenation: None,
     payload: [],
@@ -371,24 +397,24 @@ pub fn Pdu::to_hex(self : Pdu) -> String raise SmsError {
 pub fn SmsSubmit::to_octets(self : SmsSubmit) -> Array[Byte] raise SmsError {
   let out : Array[Byte] = []
   append_smsc(out, self.smsc)
-  let has_udh = not(self.concatenation is None)
+  let has_udh = !(self.concatenation is None)
   let vpf = match self.validity {
     Default => 0
     Relative(_) => 1
     RelativeRaw(_) => 2
     Absolute(_) => 3
   }
-  let first = 0x01
-  | (if self.reject_duplicates { 0x04 } else { 0 })
-  | (vpf << 3)
-  | (if self.request_status_report { 0x20 } else { 0 })
-  | (if has_udh { 0x40 } else { 0 })
-  | (if self.reply_path { 0x80 } else { 0 })
+  let first = 0x01 |
+    (if self.reject_duplicates { 0x04 } else { 0 }) |
+    (vpf << 3) |
+    (if self.request_status_report { 0x20 } else { 0 }) |
+    (if has_udh { 0x40 } else { 0 }) |
+    (if self.reply_path { 0x80 } else { 0 })
   out.push(first.to_byte())
   out.push((self.message_reference & 0xFF).to_byte())
   out.append(self.destination.to_octets())
   out.push(b'\x00') // TP-PID: SME-to-SME protocol, no interworking
-  out.push(dcs_of_encoding(self.encoding))
+  out.push(encode_dcs(self.encoding, class?=self.class))
   // Absolute validity needs the timestamp before the text is packed.
   match self.validity {
     Default => ()
@@ -400,7 +426,12 @@ pub fn SmsSubmit::to_octets(self : SmsSubmit) -> Array[Byte] raise SmsError {
     Some(concat) => Some(concatenation_header(concat))
     None => None
   }
-  let (ud, udl) = encode_user_data(self.encoding, self.text, self.payload, header)
+  let (ud, udl) = encode_user_data(
+    self.encoding,
+    self.text,
+    self.payload,
+    header,
+  )
   out.push(udl.to_byte())
   out.append(ud)
   out
@@ -411,18 +442,23 @@ pub fn SmsSubmit::to_octets(self : SmsSubmit) -> Array[Byte] raise SmsError {
 pub fn SmsDeliver::to_octets(self : SmsDeliver) -> Array[Byte] raise SmsError {
   let out : Array[Byte] = []
   append_smsc(out, self.service_center)
-  let has_udh = not(self.header is None)
-  let first = 0x00
-  | (if self.no_more_messages { 0x04 } else { 0 })
-  | (if self.status_report_indication { 0x20 } else { 0 })
-  | (if has_udh { 0x40 } else { 0 })
-  | (if self.reply_path { 0x80 } else { 0 })
+  let has_udh = !(self.header is None)
+  let first = 0x00 |
+    (if self.no_more_messages { 0x04 } else { 0 }) |
+    (if self.status_report_indication { 0x20 } else { 0 }) |
+    (if has_udh { 0x40 } else { 0 }) |
+    (if self.reply_path { 0x80 } else { 0 })
   out.push(first.to_byte())
   out.append(self.originating.to_octets())
   out.push(b'\x00')
-  out.push(dcs_of_encoding(self.encoding))
+  out.push(encode_dcs(self.encoding, class?=self.class))
   out.append(self.timestamp.to_octets())
-  let (ud, udl) = encode_user_data(self.encoding, self.text, self.payload, self.header)
+  let (ud, udl) = encode_user_data(
+    self.encoding,
+    self.text,
+    self.payload,
+    self.header,
+  )
   out.push(udl.to_byte())
   out.append(ud)
   out
@@ -430,13 +466,15 @@ pub fn SmsDeliver::to_octets(self : SmsDeliver) -> Array[Byte] raise SmsError {
 
 ///|
 /// Encodes an SMS-STATUS-REPORT.
-pub fn StatusReport::to_octets(self : StatusReport) -> Array[Byte] raise SmsError {
+pub fn StatusReport::to_octets(
+  self : StatusReport,
+) -> Array[Byte] raise SmsError {
   let out : Array[Byte] = []
   append_smsc(out, self.service_center)
-  let first = 0x02
-  | (if self.no_more_messages { 0x04 } else { 0 })
-  | (0x20)
-  | (if self.reply_path { 0x80 } else { 0 })
+  let first = 0x02 |
+    (if self.no_more_messages { 0x04 } else { 0 }) |
+    0x20 |
+    (if self.reply_path { 0x80 } else { 0 })
   out.push(first.to_byte())
   out.push((self.message_reference & 0xFF).to_byte())
   out.append(self.recipient.to_octets())
@@ -448,7 +486,7 @@ pub fn StatusReport::to_octets(self : StatusReport) -> Array[Byte] raise SmsErro
 }
 
 ///|
-fn status_code_of(status : StatusReportStatus) -> Int {
+fn status_code_of(status : StatusReportStatus) -> Int32 {
   match status {
     Delivered => 0
     TemporaryError(code) => code
@@ -468,7 +506,9 @@ fn append_smsc(out : Array[Byte], smsc : Address?) -> Unit raise SmsError {
         Alphanumeric(_) => raise InvalidField("smsc cannot be alphanumeric")
       }
       let body = encode_number_digits(digits)
-      let toa = (0x80 | (number_type_bits(type_) << 4) | numbering_plan_bits(plan)).to_byte()
+      let toa = (0x80 |
+      (number_type_bits(type_) << 4) |
+      numbering_plan_bits(plan)).to_byte()
       out.push((body.length() + 1).to_byte())
       out.push(toa)
       out.append(body)
@@ -485,7 +525,7 @@ fn encode_user_data(
   text : StringView,
   payload : ArrayView[Byte],
   header : UserDataHeader?,
-) -> (Array[Byte], Int) raise SmsError {
+) -> (Array[Byte], Int32) raise SmsError {
   match encoding {
     Gsm7 => {
       let text_septets = gsm7_to_septets(text)
@@ -531,7 +571,7 @@ fn encode_user_data(
 
 ///|
 /// Maps a relative validity octet back to a duration.
-fn decode_relative_validity(raw : Int) -> ValidityPeriod {
+fn decode_relative_validity(raw : Int32) -> ValidityPeriod {
   if raw <= 143 {
     Relative((raw + 1) * 5)
   } else if raw <= 167 {
@@ -543,12 +583,12 @@ fn decode_relative_validity(raw : Int) -> ValidityPeriod {
 
 ///|
 /// Maps a duration to the relative validity octet.
-fn relative_validity(minutes : Int) -> Byte raise SmsError {
+fn relative_validity(minutes : Int32) -> Byte raise SmsError {
   if minutes <= 0 {
     raise InvalidField("validity period must be positive")
   }
   if minutes <= 720 {
-    return (((minutes + 4) / 5) - 1).to_byte()
+    return ((minutes + 4) / 5 - 1).to_byte()
   }
   if minutes % 1440 == 0 && minutes / 1440 <= 24 {
     return (144 + minutes / 1440 - 1).to_byte()
@@ -560,10 +600,15 @@ fn relative_validity(minutes : Int) -> Byte raise SmsError {
 }
 
 ///|
-fn need(octets : ArrayView[Byte], pos : Int, what : String) -> Int raise SmsError {
+fn need(
+  octets : ArrayView[Byte],
+  pos : Int32,
+  what : String,
+) -> Int32 raise SmsError {
   guard pos < octets.length() else { raise Truncated(what) }
   octets[pos].to_int()
 }
+
 ///|
 pub impl Show for StatusReportStatus with fn to_string(self) {
   match self {
@@ -597,6 +642,9 @@ pub fn SmsDeliver::new(
     service_center: None,
     timestamp: timestamp_unchecked(2000, 1, 1, 0, 0, 0, 0),
     encoding: encoding.unwrap_or(Gsm7),
+    class: None,
+    compressed: false,
+    waiting: None,
     text,
     payload: [],
     header: None,

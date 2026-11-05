@@ -29,9 +29,18 @@ test "an alphanumeric originator round-trips" {
 
 ///|
 test "digit classification follows the trunk and access prefixes" {
-  inspect(@src.classify_digits("008613800138000"), content="(international, isdn, 8613800138000)")
-  inspect(@src.classify_digits("013800138000"), content="(national, isdn, 13800138000)")
-  inspect(@src.classify_digits("13800138000"), content="(national, isdn, 13800138000)")
+  let (type_, plan, digits) = @src.classify_digits("008613800138000")
+  inspect(type_, content="international")
+  inspect(plan, content="isdn")
+  inspect(digits, content="8613800138000")
+  let (type_, plan, digits) = @src.classify_digits("013800138000")
+  inspect(type_, content="national")
+  inspect(plan, content="isdn")
+  inspect(digits, content="13800138000")
+  let (type_, plan, digits) = @src.classify_digits("13800138000")
+  inspect(type_, content="national")
+  inspect(plan, content="isdn")
+  inspect(digits, content="13800138000")
 }
 
 ///|

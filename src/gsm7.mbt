@@ -1,34 +1,45 @@
 ///|
 /// The GSM 03.38 default alphabet, indexed by septet value (0x00..0x7F).
 let gsm7_default_table : Array[Char] = [
-  '@', '£', '$', '¥', 'è', 'é', 'ù', 'ì', 'ò', 'Ç', '\n', 'Ø', 'ø', '\r', 'Å',
-  'å', 'Δ', '_', 'Φ', 'Γ', 'Λ', 'Ω', 'Π', 'Ψ', 'Σ', 'Θ', 'Ξ', '\u{1b}', 'Æ',
-  'æ', 'ß', 'É', ' ', '!', '"', '#', '¤', '%', '&', '\'', '(', ')', '*', '+',
-  ',', '-', '.', '/', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', ':', ';',
-  '<', '=', '>', '?', '¡', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K',
-  'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z',
+  '@', '£', '$', '¥', 'è', 'é', 'ù', 'ì', 'ò', 'Ç', '\n', 'Ø', 'ø', '\r',
+  'Å', 'å', 'Δ', '_', 'Φ', 'Γ', 'Λ', 'Ω', 'Π', 'Ψ', 'Σ', 'Θ', 'Ξ', '\u{1b}',
+  'Æ', 'æ', 'ß', 'É', ' ', '!', '"', '#', '¤', '%', '&', '\'', '(', ')', '*',
+  '+', ',', '-', '.', '/', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', ':',
+  ';', '<', '=', '>', '?', '¡', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J',
+  'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z',
   'Ä', 'Ö', 'Ñ', 'Ü', '§', '¿', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i',
-  'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x',
-  'y', 'z', 'ä', 'ö', 'ñ', 'ü', 'à',
+  'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y',
+  'z', 'ä', 'ö', 'ñ', 'ü', 'à',
 ]
 
 ///|
 /// Septet value of the escape introducer that switches to the extension table.
-let gsm7_escape : Int = 0x1B
+let gsm7_escape : Int32 = 0x1B
 
 ///|
 /// Characters reachable through the escape, as (septet after 0x1B, character).
 ///
 /// The extension table is sparse: only the positions below are assigned by
 /// 3GPP TS 23.038 §6.2.1.1.
-let gsm7_extension_table : Array[(Int, Char)] = [
-  (0, '@'), (10, '\f'), (13, '\r'), (17, '_'), (20, '^'), (30, '{'), (40, '|'),
-  (41, '}'), (47, '\\'), (49, '['), (50, '~'), (57, ']'), (60, '€'),
+let gsm7_extension_table : Array[(Int32, Char)] = [
+  (0, '@'),
+  (10, '\f'),
+  (13, '\r'),
+  (17, '_'),
+  (20, '^'),
+  (30, '{'),
+  (40, '|'),
+  (41, '}'),
+  (47, '\\'),
+  (49, '['),
+  (50, '~'),
+  (57, ']'),
+  (60, '€'),
 ]
 
 ///|
 /// Reverse lookup: character to (septet, escaped).
-fn gsm7_lookup(ch : Char) -> (Int, Bool)? {
+fn gsm7_lookup(ch : Char) -> (Int32, Bool)? {
   for i, c in gsm7_default_table {
     if c == ch && i != gsm7_escape {
       return Some((i, false))
@@ -57,7 +68,7 @@ pub fn gsm7_is_encodable(text : StringView) -> Bool {
 ///|
 /// Septets `text` occupies, counting an escaped character as two.
 /// Returns -1 when the text is not representable.
-pub fn gsm7_septet_length(text : StringView) -> Int {
+pub fn gsm7_septet_length(text : StringView) -> Int32 {
   let mut n = 0
   for ch in text {
     match gsm7_lookup(ch) {
@@ -124,7 +135,7 @@ pub fn gsm7_from_septets(septets : ArrayView[Byte]) -> String {
 ///|
 /// Packs septets into octets. `fill_bits` shifts the whole stream left so the
 /// user data can start on an octet boundary behind a user data header.
-pub fn gsm7_pack(septets : ArrayView[Byte], fill_bits : Int) -> Array[Byte] {
+pub fn gsm7_pack(septets : ArrayView[Byte], fill_bits : Int32) -> Array[Byte] {
   let total_bits = fill_bits + 7 * septets.length()
   let out : Array[Byte] = Array::make((total_bits + 7) / 8, b'\x00')
   write_septets(out, 0, septets, fill_bits)
@@ -137,9 +148,9 @@ pub fn gsm7_pack(septets : ArrayView[Byte], fill_bits : Int) -> Array[Byte] {
 /// share one septet stream.
 pub fn write_septets(
   out : Array[Byte],
-  base : Int,
+  base : Int32,
   septets : ArrayView[Byte],
-  start_bit : Int,
+  start_bit : Int32,
 ) -> Unit {
   for i, s in septets {
     let bit_pos = start_bit + 7 * i
@@ -150,8 +161,8 @@ pub fn write_septets(
     }
     out[byte_pos] = (out[byte_pos].to_int() | ((s.to_int() & 0x7F) << offset)).to_byte()
     if offset > 1 && byte_pos + 1 < out.length() {
-      out[byte_pos + 1] = (out[byte_pos + 1].to_int()
-      | ((s.to_int() & 0x7F) >> (8 - offset))).to_byte()
+      out[byte_pos + 1] = (out[byte_pos + 1].to_int() |
+      ((s.to_int() & 0x7F) >> (8 - offset))).to_byte()
     }
   }
 }
@@ -159,13 +170,13 @@ pub fn write_septets(
 ///|
 /// Number of fill bits needed to bring a user data header of `octets` octets up
 /// to the next septet boundary.
-pub fn header_fill_bits(octets : Int) -> Int {
-  (7 - (octets * 8) % 7) % 7
+pub fn header_fill_bits(octets : Int32) -> Int32 {
+  (7 - octets * 8 % 7) % 7
 }
 
 ///|
 /// Septets a header of `octets` octets occupies once padded.
-pub fn header_septets(octets : Int) -> Int {
+pub fn header_septets(octets : Int32) -> Int32 {
   (octets * 8 + header_fill_bits(octets)) / 7
 }
 
@@ -174,8 +185,8 @@ pub fn header_septets(octets : Int) -> Int {
 /// leading padding bits.
 pub fn gsm7_unpack(
   octets : ArrayView[Byte],
-  septet_count : Int,
-  fill_bits : Int,
+  septet_count : Int32,
+  fill_bits : Int32,
 ) -> Array[Byte] {
   let out : Array[Byte] = []
   let mut n = 0
@@ -199,7 +210,7 @@ pub fn gsm7_unpack(
 ///|
 /// Number of septets that fit in `octet_count` octets after `fill_bits`
 /// padding.
-pub fn gsm7_fit_septets(octet_count : Int, fill_bits : Int) -> Int {
+pub fn gsm7_fit_septets(octet_count : Int32, fill_bits : Int32) -> Int32 {
   if octet_count * 8 <= fill_bits {
     return 0
   }
@@ -207,7 +218,7 @@ pub fn gsm7_fit_septets(octet_count : Int, fill_bits : Int) -> Int {
 }
 
 ///|
-fn hex4(value : Int) -> String {
+fn hex4(value : Int32) -> String {
   let digits = "0123456789ABCDEF"
   let mut out = ""
   let mut shift = 12

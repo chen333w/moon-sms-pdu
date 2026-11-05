@@ -7,26 +7,26 @@
 /// "zero offset, negative", which a plain integer offset would silently rewrite
 /// to `0x00`. Keeping the octet makes re-encoding byte for byte identical.
 pub(all) struct Timestamp {
-  year : Int
-  month : Int
-  day : Int
-  hour : Int
-  minute : Int
-  second : Int
-  tz_raw : Int
+  year : Int32
+  month : Int32
+  day : Int32
+  hour : Int32
+  minute : Int32
+  second : Int32
+  tz_raw : Int32
 } derive(Eq, @debug.Debug)
 
 ///|
 /// Builds a timestamp from calendar fields and an offset in minutes. The offset
 /// must be a whole number of quarter hours.
 pub fn Timestamp::new(
-  year : Int,
-  month : Int,
-  day : Int,
-  hour : Int,
-  minute : Int,
-  second : Int,
-  offset_minutes : Int,
+  year : Int32,
+  month : Int32,
+  day : Int32,
+  hour : Int32,
+  minute : Int32,
+  second : Int32,
+  offset_minutes : Int32,
 ) -> Timestamp raise SmsError {
   guard offset_minutes % 15 == 0 else {
     raise InvalidField("time zone must be a multiple of fifteen minutes")
@@ -37,13 +37,13 @@ pub fn Timestamp::new(
   guard magnitude <= 79 else { raise InvalidField("time zone out of range") }
   let sign_bit = if negative { 0x08 } else { 0 }
   let tz_raw = ((magnitude / 10) & 0x7) | ((magnitude % 10) << 4) | sign_bit
-  { year, month, day, hour, minute, second, tz_raw }
+  { year, month, day, hour, minute, second, tz_raw, }
 }
 
 ///|
 /// Offset from UTC in minutes, positive east of Greenwich.
-pub fn Timestamp::offset_minutes(self : Timestamp) -> Int {
-  let quarters = ((self.tz_raw & 0x07) * 10) + ((self.tz_raw >> 4) & 0xF)
+pub fn Timestamp::offset_minutes(self : Timestamp) -> Int32 {
+  let quarters = (self.tz_raw & 0x07) * 10 + ((self.tz_raw >> 4) & 0xF)
   if (self.tz_raw & 0x08) != 0 {
     -quarters * 15
   } else {
@@ -53,13 +53,13 @@ pub fn Timestamp::offset_minutes(self : Timestamp) -> Int {
 
 ///|
 /// Reads one swapped-BCD pair: the low nibble holds the tens digit.
-fn read_bcd(octets : ArrayView[Byte], pos : Int) -> Int {
+fn read_bcd(octets : ArrayView[Byte], pos : Int32) -> Int32 {
   let byte = octets[pos].to_int()
-  ((byte & 0xF) * 10) + ((byte >> 4) & 0xF)
+  (byte & 0xF) * 10 + ((byte >> 4) & 0xF)
 }
 
 ///|
-fn write_bcd(value : Int) -> Byte {
+fn write_bcd(value : Int32) -> Byte {
   (((value / 10) & 0xF) | (((value % 10) & 0xF) << 4)).to_byte()
 }
 
@@ -90,7 +90,10 @@ pub fn Timestamp::is_valid(self : Timestamp) -> Bool {
 
 ///|
 /// Parses the seven timestamp octets at `pos`.
-pub fn read_timestamp(octets : ArrayView[Byte], pos : Int) -> Timestamp raise SmsError {
+pub fn read_timestamp(
+  octets : ArrayView[Byte],
+  pos : Int32,
+) -> Timestamp raise SmsError {
   guard pos + 6 < octets.length() else { raise Truncated("timestamp") }
   {
     // The year is stored as an offset from 1900, not from 2000.
@@ -109,8 +112,12 @@ pub fn read_timestamp(octets : ArrayView[Byte], pos : Int) -> Timestamp raise Sm
 pub fn Timestamp::to_octets(self : Timestamp) -> Array[Byte] raise SmsError {
   guard self.is_valid() else { raise InvalidField("timestamp out of range") }
   [
-    write_bcd(self.year % 100), write_bcd(self.month), write_bcd(self.day),
-    write_bcd(self.hour), write_bcd(self.minute), write_bcd(self.second),
+    write_bcd(self.year % 100),
+    write_bcd(self.month),
+    write_bcd(self.day),
+    write_bcd(self.hour),
+    write_bcd(self.minute),
+    write_bcd(self.second),
     self.tz_raw.to_byte(),
   ]
 }
@@ -130,25 +137,26 @@ pub impl Show for Timestamp with fn to_string(self) {
 }
 
 ///|
-fn pad(value : Int, width : Int) -> String {
+fn pad(value : Int32, width : Int32) -> String {
   let mut out = value.to_string()
   while out.length() < width {
     out = "0" + out
   }
   out
 }
+
 ///|
 /// Builds a timestamp for fixtures, panicking on an invalid argument.
 pub fn timestamp_unchecked(
-  year : Int,
-  month : Int,
-  day : Int,
-  hour : Int,
-  minute : Int,
-  second : Int,
-  offset_minutes : Int,
+  year : Int32,
+  month : Int32,
+  day : Int32,
+  hour : Int32,
+  minute : Int32,
+  second : Int32,
+  offset_minutes : Int32,
 ) -> Timestamp {
-  try Timestamp::new(year, month, day, hour, minute, second, offset_minutes) catch {
+  Timestamp::new(year, month, day, hour, minute, second, offset_minutes) catch {
     _ => abort("invalid timestamp fixture")
   }
 }

@@ -24,7 +24,9 @@ test "an eight bit payload survives untouched" {
       "",
       encoding=@src.EightBit,
     ),
-    service_center: Some(@src.Number(@src.International, @src.Isdn, "31624000001")),
+    service_center: Some(
+      @src.Number(@src.International, @src.Isdn, "31624000001"),
+    ),
     timestamp: @src.timestamp_unchecked(2024, 5, 6, 12, 30, 0, 0),
     payload: [b'\x00', b'\xFF', b'\x10', b'\x7F'],
   }
@@ -42,10 +44,9 @@ test "an eight bit payload survives untouched" {
 ///|
 test "port addressing is readable from a header" {
   let header = @src.UserDataHeader::new([
-    @src.HeaderElement::new(
-      @src.iei_application_port_16bit,
-      [b'\x0B', b'\x84', b'\x23', b'\xF0'],
-    ),
+    @src.HeaderElement::new(@src.iei_application_port_16bit, [
+      b'\x0B', b'\x84', b'\x23', b'\xF0',
+    ]),
   ])
   match header.ports() {
     Some(ports) => {

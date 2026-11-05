@@ -1,12 +1,17 @@
 ///|
 /// Parses hex into octets, skipping whitespace and `:` separators.
 pub fn hex_to_octets(hex : StringView) -> Array[Byte] raise SmsError {
-  let digits : Array[Int] = []
+  let digits : Array[Int32] = []
   for ch in hex {
     match hex_digit_value(ch) {
       Some(value) => digits.push(value)
       None =>
-        if ch != ' ' && ch != '\t' && ch != '\n' && ch != '\r' && ch != ':' && ch != '-' {
+        if ch != ' ' &&
+          ch != '\t' &&
+          ch != '\n' &&
+          ch != '\r' &&
+          ch != ':' &&
+          ch != '-' {
           raise InvalidHex("unexpected character '\{ch}'")
         }
     }
@@ -54,11 +59,11 @@ pub fn octets_to_hex_spaced(octets : ArrayView[Byte]) -> String {
 }
 
 ///|
-fn hex_digit_value(ch : Char) -> Int? {
+fn hex_digit_value(ch : Char) -> Int32? {
   match ch {
-    '0'..='9' => Some(ch.to_int() - '0'.to_int())
-    'a'..='f' => Some(ch.to_int() - 'a'.to_int() + 10)
-    'A'..='F' => Some(ch.to_int() - 'A'.to_int() + 10)
+    '0'..<='9' => Some(ch.to_int() - '0'.to_int())
+    'a'..<='f' => Some(ch.to_int() - 'a'.to_int() + 10)
+    'A'..<='F' => Some(ch.to_int() - 'A'.to_int() + 10)
     _ => None
   }
 }
@@ -71,7 +76,11 @@ pub fn ucs2_to_utf8(octets : ArrayView[Byte]) -> String {
   let units : Array[UInt16] = []
   let mut i = 0
   while i + 1 < octets.length() {
-    units.push(((octets[i].to_int() << 8) | octets[i + 1].to_int()).reinterpret_as_uint().to_uint16())
+    units.push(
+      ((octets[i].to_int() << 8) | octets[i + 1].to_int())
+      .reinterpret_as_uint()
+      .to_uint16(),
+    )
     i = i + 2
   }
   let out = StringBuilder()
@@ -82,7 +91,7 @@ pub fn ucs2_to_utf8(octets : ArrayView[Byte]) -> String {
       let low = units[k + 1].to_int()
       if low >= 0xDC00 && low <= 0xDFFF {
         let code = 0x10000 + ((unit - 0xD800) << 10) + (low - 0xDC00)
-        out.write_char(Int::unsafe_to_char(code))
+        out.write_char(Int32::unsafe_to_char(code))
         k = k + 2
         continue
       }
@@ -90,7 +99,7 @@ pub fn ucs2_to_utf8(octets : ArrayView[Byte]) -> String {
     if unit >= 0xD800 && unit <= 0xDFFF {
       out.write_char('\u{FFFD}')
     } else {
-      out.write_char(Int::unsafe_to_char(unit))
+      out.write_char(Int32::unsafe_to_char(unit))
     }
     k = k + 1
   }
@@ -125,7 +134,7 @@ pub fn utf8_to_ucs2(text : StringView) -> Array[Byte] {
 pub fn latin1_to_utf8(octets : ArrayView[Byte]) -> String {
   let buf = StringBuilder()
   for b in octets {
-    buf.write_char(Int::unsafe_to_char(b.to_int()))
+    buf.write_char(Int32::unsafe_to_char(b.to_int()))
   }
   buf.to_string()
 }
@@ -136,16 +145,19 @@ pub fn utf8_to_latin1(text : StringView) -> Array[Byte] raise SmsError {
   let out : Array[Byte] = []
   for ch in text {
     let code = ch.to_int()
-    guard code <= 0xFF else { raise NotEncodable("not latin-1: U+" + code.to_string()) }
+    guard code <= 0xFF else {
+      raise NotEncodable("not latin-1: U+" + code.to_string())
+    }
     out.push(code.to_byte())
   }
   out
 }
+
 ///|
 /// Copies octets into `out` starting at `pos`, leaving the rest untouched.
 pub fn write_bytes_at(
   out : Array[Byte],
-  pos : Int,
+  pos : Int32,
   src : ArrayView[Byte],
 ) -> Unit {
   for i, b in src {

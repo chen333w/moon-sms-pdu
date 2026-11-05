@@ -1,12 +1,6 @@
 # moon-sms-pdu
 
-SMS PDU 编解码，纯 MoonBit 实现，不依赖 FFI，没有 C 代码。
-
-发短信这件事看起来简单，落到协议层就全是细节：GSM 7-bit 的 septet 要按位错位打包，
-一条长短信要切成带 UDH 头的多段，中英文混排还要在两个码表之间切换，
-再加上状态报告、有效期、号码的半字节编码。这个库把这些都做完，
-并且保证解码再编码后与原报文逐字节一致——对接运营商网关时这一点很关键，
-差一个字节就会被判为非法报文。
+SMS PDU 编解码，纯 MoonBit，无 FFI，无 C 依赖。
 
 ## 安装
 
@@ -16,23 +10,23 @@ moon add chen333w/moon-sms-pdu
 
 ## 用法
 
-解析一条从串口读到的 PDU：
+解析一条 PDU：
 
-```moonbit
+```moonbit nocheck
 let pdu = @lib.parse_pdu("07911326040000F0040B911346610089F60000208062917314080CC8F71D14969741F977FD07")
 match pdu {
   Deliver(deliver) => {
     println(deliver.originating.to_string_display())  // +31641600986
     println(deliver.text)                             // How are you?
-    println(deliver.timestamp.to_display())           // 2002-08-26T19:37:41+00:00
+    println(deliver.timestamp.to_display())           // 1902-08-26T19:37:41+00:00
   }
   _ => ()
 }
 ```
 
-组装一条要发出去的短信：
+组装一条 SMS-SUBMIT：
 
-```moonbit
+```moonbit nocheck
 let submit = @lib.SmsSubmit::new(
   Number(International, Isdn, "8613800138000"),
   "Hello",
@@ -40,20 +34,26 @@ let submit = @lib.SmsSubmit::new(
 println(@lib.Pdu::Submit(submit).to_hex())
 ```
 
-长短信会被切成多段，每段带同一个参考号和序号：
+长短信切成多段，每段共用参考号：
 
-```moonbit
+```moonbit nocheck
 let parts = @lib.build_submits(destination, long_text, reference=42)
 for submit in parts {
   send_over_at_command(@lib.Pdu::Submit(submit).to_hex())
 }
 ```
 
-收到的分段短信按参考号重新拼起来：
+收到的分段按参考号重组。乱序和重复都能处理，缺片时返回 `None`：
 
-```moonbit
-// 分段可以乱序、可以重复，缺片时返回 None
+```moonbit nocheck
 println(@lib.assemble(delivered_parts))
+```
+
+USSD 走同一套传输，格式不同：
+
+```moonbit nocheck
+let ussd = @lib.UssdMessage::new("*100#")
+println(@lib.octets_to_hex(ussd.to_octets()))
 ```
 
 ## 命令行
@@ -63,50 +63,51 @@ moon run cmd/main -- decode 07911326040000F0040B911346610089F6000020806291731408
 moon run cmd/main -- encode '+8613800138000' 'Hello from MoonBit'
 moon run cmd/main -- parts  '+8613800138000' "$(cat long_message.txt)"
 moon run cmd/main -- length '一条比较长的短信……'
+moon run cmd/main -- ussd   '*100#'
 ```
 
-`decode` 会顺带打印重编码后的十六进制，方便直接比对报文。
+`decode` 会打印重编码后的十六进制，可以直接和原报文对比。
 
-## 实现范围
+## 支持范围
 
-编码：
+字符编码：
 
-- GSM 03.38 默认字符表，含 0x1B 转义表（`€` `[` `]` `{` `}` `\` `~` `|` `^`）
-- septet 打包与解包，支持任意比特偏移，所以 UDH 和正文可以共用一条比特流
-- UCS-2，代理对按 UTF-16BE 拆成两字节
-- 8-bit 原始数据，供 OTA、WAP Push 一类业务使用
+- GSM 03.38 默认字符表与 0x1B 转义表（`€` `[` `]` `{` `}` `\` `~` `|` `^`）
+- septet 打包与解包，支持任意比特偏移，UDH 和正文可共用一条比特流
+- UCS-2，代理对按 UTF-16BE 拆成两个码元
+- 8-bit 原始数据，用于 OTA、WAP Push
 
 PDU：
 
-- SMS-SUBMIT、SMS-DELIVER、SMS-STATUS-REPORT 三个方向的编解码
+- SMS-SUBMIT、SMS-DELIVER、SMS-STATUS-REPORT 编解码
 - SMSC 地址前缀，BCD 半字节顺序按 23.040 §9.1.2.5
-- 数字地址与字母数字地址（发件人是名字的情况）
-- TP-DCS 的字符集判定，含压缩位、消息类别位
+- 数字地址与字母数字地址
+- TP-DCS 字符集、压缩标志、消息类别（含 class 0 闪信）、语音信箱指示
 - 相对有效期（分钟/天/周三档）与绝对有效期
 - 用户数据头：分段、端口寻址
 - 分段消息的切分与重组
 
-## 几个容易踩的坑
+不支持 SMS-COMMAND（TPDU 类型 10 且 bit 1 为 0），解析时抛错。
 
-这些坑都是实际调试时撞到的，写在这里省得别人再撞一次。
+## 解码时的几处约定
 
-**时间戳的年份从 1900 起算。** 23.040 里 TP-SCTS 存的是相对 1900 的偏移。
-如果换成 2000，年份会整体差 100 年，而且只在报文里看不出来。
+**TP-SCTS 的年份相对 1900。** 按 2000 算是错的，会让所有时间戳差 100 年。
+文中示例报文解出 1902 年，是原报文本身如此。
 
-**时区字节要原样保留。** 时区放在半字节里，符号位是 bit 3。
-负数零（`0x08`）和正零（`0x00`）在语义上都表示 UTC，
-但如果解码时把它归一化成整数分钟，再编码就会把 `0x08` 写成 `0x00`。
-所以库里存的是原始字节，不是偏移量。
+**时区保存原始字节，不存偏移量。** 符号位在 bit 3，`0x08` 是负零。
+归一化成整数分钟再写回会变成 `0x00`，逐字节比对就对不上了。
 
-**带 UDH 时 TP-UDL 的单位是混的。** 头部的长度按八位组算，
-后面的正文按 septet 算。把两者当成同一单位处理，长短信就会解出乱码或者越界。
+**带 UDH 时 TP-UDL 的单位不同。** 头部长度按八位组，正文按 septet。
+两者混用会导致越界或解出乱码。
 
-**0x40 在不同 PDU 里含义不同。** SUBMIT 里它是 TP-UDHI（有无用户数据头），
-DELIVER 里同样是 UDHI，但 DELIVER 的 bit 5 是 TP-SRI（要求状态报告），
-不能混。这个错误的表现是：一条本该正常的短信被当成带头的，正文整体错位。
+**bit 0x40 在不同 TPDU 里含义不同。** SUBMIT 和 DELIVER 里都是 TP-UDHI，
+但 DELIVER 的 bit 5 是 TP-SRI。误判会把普通短信当成带头的，正文整体错位。
 
-**UCS-2 的容量单位是八位组。** 单条 140 字节、分段 134 字节，换算成字符是 70 和 67。
-如果按字符数限制长度，中文短信用到一半就会被截断。
+**UCS-2 的容量按八位组算。** 单条 140 字节、分段 134 字节，折合 70 和 67 个字符。
+按字符数限长会把中文短信截断。
+
+**未定义的转义字符原样返回。** 0x1B 后面跟的码在扩展表里没有时，
+回退到默认表对应位置，不丢弃。
 
 ## 测试
 
@@ -114,13 +115,14 @@ DELIVER 里同样是 UDHI，但 DELIVER 的 bit 5 是 TP-SRI（要求状态报�
 moon test
 ```
 
-测试里用了几个真实报文做端到端校验，包括：
+40 个测试，覆盖：
 
-- 一份 3GPP 文档里的荷兰运营商短信
-- 中英文混排的往返
-- 三段的英文长短信，每段编码-解码-再编码后与原报文逐字节相同
-- UUID 分段头与端口寻址
-- 畸形输入必须抛错而不是崩溃
+- 3GPP 文档中的荷兰运营商短信样本
+- 中英文混排往返
+- 三段英文长短信，逐段编码-解码-再编码后与原报文完全一致
+- 分段头、端口寻址、字母数字发件人、8-bit 载荷
+- 消息类别、压缩标志、语音信箱指示
+- 畸形输入必须抛错
 
 ## 许可
 
