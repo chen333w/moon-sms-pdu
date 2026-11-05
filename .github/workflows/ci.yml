@@ -13,8 +13,11 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install MoonBit
+        env:
+          # Pinned so a toolchain release cannot turn the build red on its own.
+          MOONBIT_VERSION: 0.1.20261020
         run: |
-          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash -s -- "$MOONBIT_VERSION"
           echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
 
       - name: Show toolchain versions
