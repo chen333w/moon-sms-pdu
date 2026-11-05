@@ -125,6 +125,10 @@ fn describe_pdu(pdu : @lib.Pdu) -> Unit {
           )
         None => ()
       }
+      match deliver.application() {
+        Some(app) => println("application:       \{app}")
+        None => ()
+      }
       match deliver.header {
         Some(header) =>
           match header.ports() {
