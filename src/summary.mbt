@@ -197,3 +197,100 @@ pub fn stats_of(pdus : ArrayView[Pdu]) -> PduStats {
 pub impl Show for PduStats with fn to_string(self) {
   self.to_display()
 }
+
+///|
+/// Renders a PDU as labelled lines, the shape a person reads when they are
+/// staring at one message rather than scanning many.
+///
+/// Field names follow the standard's abbreviations, because anyone debugging a
+/// modem will have the spec open next to the terminal.
+pub fn Pdu::to_display(self : Pdu) -> String {
+  let lines : Array[String] = []
+  match self {
+    Submit(submit) => {
+      lines.push("SMS-SUBMIT")
+      lines.push("  TP-MR       \{submit.message_reference}")
+      lines.push("  TP-DA       \{submit.destination.to_string_display()}")
+      lines.push("  TP-PID      \{submit.pid}")
+      lines.push("  TP-DCS      \{submit.encoding}")
+      match submit.class {
+        Some(c) => lines.push("  TP-DCS cl.  \{c}")
+        None => ()
+      }
+      lines.push("  TP-VP       \{describe_validity(submit.validity)}")
+      lines.push("  TP-UDL      \{submit.text.char_length()} chars")
+      match submit.concatenation {
+        Some(c) =>
+          lines.push(
+            "  UDH concat  \{c.sequence}/\{c.total} ref \{c.reference}",
+          )
+        None => ()
+      }
+      lines.push("  TP-UD       \{submit.text}")
+    }
+    Deliver(deliver) => {
+      lines.push("SMS-DELIVER")
+      match deliver.service_center {
+        Some(smsc) => lines.push("  SMSC        \{smsc.to_string_display()}")
+        None => lines.push("  SMSC        (from the modem)")
+      }
+      lines.push("  TP-OA       \{deliver.originating.to_string_display()}")
+      lines.push("  TP-SCTS     \{deliver.timestamp.to_display()}")
+      lines.push("  TP-PID      \{deliver.pid}")
+      lines.push("  TP-DCS      \{deliver.encoding}")
+      match deliver.class {
+        Some(c) => lines.push("  TP-DCS cl.  \{c}")
+        None => ()
+      }
+      match deliver.waiting {
+        Some(w) => lines.push("  TP-DCS mwi  \{w}")
+        None => ()
+      }
+      if deliver.compressed {
+        lines.push("  TP-DCS cmp  compressed")
+      }
+      match deliver.application() {
+        Some(app) => lines.push("  App port    \{app}")
+        None => ()
+      }
+      match deliver.concatenation {
+        Some(c) =>
+          lines.push(
+            "  UDH concat  \{c.sequence}/\{c.total} ref \{c.reference}",
+          )
+        None => ()
+      }
+      if deliver.encoding == EightBit {
+        lines.push("  TP-UD       \{octets_to_hex(deliver.payload)} (binary)")
+      } else {
+        lines.push("  TP-UD       \{deliver.text}")
+      }
+    }
+    StatusReport(report) => {
+      lines.push("SMS-STATUS-REPORT")
+      lines.push("  TP-MR       \{report.message_reference}")
+      lines.push("  TP-RA       \{report.recipient.to_string_display()}")
+      lines.push("  TP-SCTS     \{report.timestamp.to_display()}")
+      lines.push("  TP-DT       \{report.discharge_time.to_display()}")
+      lines.push("  TP-ST       \{report.status}")
+    }
+    Command(command) => {
+      lines.push("SMS-COMMAND")
+      lines.push("  TP-MR       \{command.message_reference}")
+      lines.push("  TP-DA       \{command.destination.to_string_display()}")
+      lines.push("  TP-CT       \{command.command_type}")
+      lines.push("  TP-MN       \{command.target_message_reference}")
+    }
+  }
+  lines.join("\n")
+}
+
+///|
+fn describe_validity(validity : ValidityPeriod) -> String {
+  match validity {
+    Default => "smSC default"
+    Relative(minutes) => "\{minutes} minutes"
+    RelativeRaw(raw) => "raw octet \{raw}"
+    Absolute(stamp) => stamp.to_display()
+  }
+}
