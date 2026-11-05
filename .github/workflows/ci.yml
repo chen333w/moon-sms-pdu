@@ -21,8 +21,8 @@ jobs:
         run: |
           moon version --all
 
-      - name: Install dependencies
-        run: moon install
+      - name: Fetch registry index
+        run: moon update
 
       - name: Check formatting
         run: |
