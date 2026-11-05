@@ -49,11 +49,39 @@ for submit in parts {
 println(@lib.assemble(delivered_parts))
 ```
 
+分段是陆续到达的，用缓冲逐个喂进去：
+
+```moonbit nocheck
+let buffer = @lib.ReassemblyBuffer::new(timeout_seconds=600)
+match buffer.push(deliver, now) {
+  Complete(text) => handle(text)
+  Pending(got, total) => ()
+  Duplicate => ()
+  Single(text) => handle(text)
+  Rejected(reason) => ()
+}
+// 定时清理发了一半就放弃的消息
+buffer.expire(now)
+```
+
 USSD 走同一套传输，格式不同：
 
 ```moonbit nocheck
 let ussd = @lib.UssdMessage::new("*100#")
 println(@lib.octets_to_hex(ussd.to_octets()))
+```
+
+和模组打交道时，AT 指令的拼装和响应解析也在库里：
+
+```moonbit nocheck
+// AT+CMGS 要的是 TPDU 长度（不含 SMSC 前缀），结尾必须是 Ctrl-Z
+for line in @lib.at_send_sequence(pdu) {
+  write_to_modem(line)
+}
+// 解析 AT+CMGL 的响应
+for message in @lib.parse_cmgl(response) {
+  println(message.index, message.pdu)
+}
 ```
 
 ## 命令行
@@ -79,15 +107,15 @@ moon run cmd/main -- ussd   '*100#'
 
 PDU：
 
-- SMS-SUBMIT、SMS-DELIVER、SMS-STATUS-REPORT 编解码
+- SMS-SUBMIT、SMS-DELIVER、SMS-STATUS-REPORT、SMS-COMMAND 编解码
 - SMSC 地址前缀，BCD 半字节顺序按 23.040 §9.1.2.5
 - 数字地址与字母数字地址
 - TP-DCS 字符集、压缩标志、消息类别（含 class 0 闪信）、语音信箱指示
 - 相对有效期（分钟/天/周三档）与绝对有效期
+- TP-PID 四种分组：SMSC 分配、短消息类型、电传互通、SC 专有
 - 用户数据头：分段、端口寻址
-- 分段消息的切分与重组
-
-不支持 SMS-COMMAND（TPDU 类型 10 且 bit 1 为 0），解析时抛错。
+- 分段消息的切分、一次性重组，以及按到达顺序的流式重组（去重、过期、冲突拒绝）
+- AT 指令：`AT+CMGF`、`AT+CMGS` 长度计算、`AT+CMGL` 响应解析、`AT+CMGD`、`AT+CUSD`
 
 ## 解码时的几处约定
 
@@ -115,13 +143,16 @@ PDU：
 moon test
 ```
 
-40 个测试，覆盖：
+60 个测试，覆盖：
 
 - 3GPP 文档中的荷兰运营商短信样本
 - 中英文混排往返
 - 三段英文长短信，逐段编码-解码-再编码后与原报文完全一致
 - 分段头、端口寻址、字母数字发件人、8-bit 载荷
 - 消息类别、压缩标志、语音信箱指示
+- TP-PID 四组往返、SMS-COMMAND 五种命令类型
+- 乱序到达、重复片、过期、参考号冲突
+- AT+CMGL 两种响应格式
 - 畸形输入必须抛错
 
 ## 许可
