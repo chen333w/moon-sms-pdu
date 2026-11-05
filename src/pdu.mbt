@@ -842,3 +842,92 @@ pub fn SmsCommand::to_octets(self : SmsCommand) -> Array[Byte] raise SmsError {
   out.append(ud)
   out
 }
+
+///|
+/// The instant a submit stops being worth delivering.
+///
+/// A relative validity period counts from the moment the SMSC accepted the
+/// message, which is not on the wire, so the caller has to supply it. An
+/// absolute one carries its own deadline.
+pub fn SmsSubmit::expires_at(
+  self : SmsSubmit,
+  accepted_at : Timestamp,
+) -> Timestamp? raise SmsError {
+  match self.validity {
+    Default => None
+    Relative(minutes) => Some(accepted_at.add_seconds(minutes.to_int64() * 60L))
+    RelativeRaw(raw) => {
+      let resolved = decode_relative_minutes(raw)
+      Some(accepted_at.add_seconds(resolved.to_int64() * 60L))
+    }
+    Absolute(stamp) => Some(stamp)
+  }
+}
+
+///|
+/// Minutes a relative validity octet stands for. Duplicated logic is avoided by
+/// routing through the same decode the reader uses.
+fn decode_relative_minutes(raw : Int32) -> Int32 {
+  if raw <= 143 {
+    (raw + 1) * 5
+  } else if raw <= 167 {
+    (raw - 143) * 1440
+  } else {
+    (raw - 166) * 10080
+  }
+}
+
+///|
+/// Whether a status report says the message arrived, and if so whether it
+/// arrived in time.
+///
+/// A report that comes back after the validity period is a curious case: the
+/// handset did get it, but a sender that already retried has now sent it twice.
+pub(all) enum DeliveryOutcome {
+  /// Delivered inside the validity period.
+  DeliveredOnTime
+  /// Delivered, but the deadline had already passed.
+  DeliveredLate
+  /// Still being retried.
+  StillRetrying(Int32)
+  /// The SMSC gave up.
+  Failed(Int32)
+  /// The report does not map onto the codes the standard defines.
+  Unknown(Int32)
+} derive(Eq, @debug.Debug)
+
+///|
+/// Classifies a status report against the submit it refers to.
+pub fn classify_delivery(
+  report : StatusReport,
+  submit : SmsSubmit,
+  accepted_at : Timestamp,
+) -> DeliveryOutcome raise SmsError {
+  match report.status {
+    Delivered =>
+      match submit.expires_at(accepted_at) {
+        Some(deadline) =>
+          if report.discharge_time.is_before(deadline) {
+            DeliveredOnTime
+          } else {
+            DeliveredLate
+          }
+        None => DeliveredOnTime
+      }
+    TemporaryError(code) => StillRetrying(code)
+    PermanentError(code) => Failed(code)
+    TemporaryUnknown(code) => StillRetrying(code)
+    Other(code) => Unknown(code)
+  }
+}
+
+///|
+pub impl Show for DeliveryOutcome with fn to_string(self) {
+  match self {
+    DeliveredOnTime => "delivered"
+    DeliveredLate => "delivered late"
+    StillRetrying(code) => "retrying (\{code})"
+    Failed(code) => "failed (\{code})"
+    Unknown(code) => "unknown (\{code})"
+  }
+}
