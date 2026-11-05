@@ -40,7 +40,7 @@ test "an alphabetic sender cannot be matched by number" {
 
 ///|
 test "rewriting to international makes two spellings equal" {
-  let local = @src.Number(@src.National, @src.Isdn, "013800138000")
-  let rewritten = local.to_international("86")
+  let domestic = @src.Number(@src.National, @src.Isdn, "013800138000")
+  let rewritten = domestic.to_international("86")
   inspect(rewritten.to_string_display(), content="+8613800138000")
 }
