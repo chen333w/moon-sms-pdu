@@ -62,6 +62,12 @@ fn digit_to_nibble(ch : Char) -> Int32? {
 ///|
 /// Encodes a digit string as BCD, low nibble first, padded with 0xF.
 fn encode_number_digits(digits : StringView) -> Array[Byte] raise SmsError {
+  // TP-DA is one octet of semi-octets, so twenty digits is the ceiling. A
+  // longer number would encode its length into a byte the receiver reads as
+  // something else.
+  guard digits.char_length() <= 20 else {
+    raise InvalidField("address longer than twenty digits")
+  }
   let out : Array[Byte] = []
   let chars = digits.to_array()
   let mut i = 0

@@ -50,3 +50,25 @@ test "dialling characters survive the round-trip" {
   let (back, _) = @src.read_address(octets, 0)
   inspect(back.to_string_display(), content="*123#")
 }
+
+///|
+test "an address longer than twenty digits is refused" {
+  let too_long = @src.Number(
+    @src.International,
+    @src.Isdn,
+    "123456789012345678901",
+  )
+  let result = Ok(too_long.to_octets()) catch { e => Err(e) }
+  inspect(result is Err(_), content="true")
+}
+
+///|
+test "twenty digits is the boundary and still encodes" {
+  let longest = @src.Number(
+    @src.International,
+    @src.Isdn,
+    "12345678901234567890",
+  )
+  let octets = longest.to_octets() catch { e => fail(e.to_message()) }
+  inspect(octets[0], content="b'\\x14'")
+}

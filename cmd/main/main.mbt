@@ -114,6 +114,10 @@ fn parse_number(text : String) -> @lib.Address {
 
 ///|
 fn encode_cmd(number : String, text : String) -> Unit {
+  if number.trim().is_empty() {
+    println("a message needs a destination number")
+    return
+  }
   let encoding = if @lib.gsm7_is_encodable(text) {
     @lib.Gsm7
   } else {
@@ -133,6 +137,10 @@ fn encode_cmd(number : String, text : String) -> Unit {
 
 ///|
 fn parts_cmd(number : String, text : String) -> Unit {
+  if number.trim().is_empty() {
+    println("a message needs a destination number")
+    return
+  }
   let encoding = if @lib.gsm7_is_encodable(text) {
     @lib.Gsm7
   } else {
