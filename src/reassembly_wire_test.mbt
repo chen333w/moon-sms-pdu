@@ -57,7 +57,7 @@ test "parts from two senders do not mix" {
   let buffer = @src.ReassemblyBuffer::new()
   let mut from_a = ""
   let mut from_b = ""
-  for i, submit in a {
+  for submit in a {
     let got = {
       ..@src.SmsDeliver::new(submit.destination, submit.text),
       concatenation: submit.concatenation,
