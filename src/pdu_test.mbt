@@ -13,7 +13,7 @@ test "decode a gsm7 sms-deliver" {
         content="+31624000000",
       )
       inspect(deliver.encoding, content="GSM 7-bit")
-      inspect(deliver.timestamp.year, content="1902")
+      inspect(deliver.timestamp.year, content="2002")
       inspect(deliver.timestamp.month, content="8")
       inspect(deliver.timestamp.day, content="26")
     }

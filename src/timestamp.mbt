@@ -67,7 +67,10 @@ fn write_bcd(value : Int32) -> Byte {
 /// True when the calendar fields form a real date.
 pub fn Timestamp::is_valid(self : Timestamp) -> Bool {
   let year = self.year
-  if year < 1900 || year > 2089 {
+  // The wire format stores two digits, so the representable range has to be
+  // one century. Reading and writing must agree on which, or a timestamp
+  // survives a decode and then comes back a hundred years off.
+  if year < 2000 || year > 2099 {
     return false
   }
   if self.month < 1 || self.month > 12 {
@@ -96,8 +99,7 @@ pub fn read_timestamp(
 ) -> Timestamp raise SmsError {
   guard pos + 6 < octets.length() else { raise Truncated("timestamp") }
   {
-    // The year is stored as an offset from 1900, not from 2000.
-    year: 1900 + read_bcd(octets, pos),
+    year: 2000 + read_bcd(octets, pos),
     month: read_bcd(octets, pos + 1),
     day: read_bcd(octets, pos + 2),
     hour: read_bcd(octets, pos + 3),
@@ -112,7 +114,7 @@ pub fn read_timestamp(
 pub fn Timestamp::to_octets(self : Timestamp) -> Array[Byte] raise SmsError {
   guard self.is_valid() else { raise InvalidField("timestamp out of range") }
   [
-    write_bcd(self.year % 100),
+    write_bcd(self.year - 2000),
     write_bcd(self.month),
     write_bcd(self.day),
     write_bcd(self.hour),

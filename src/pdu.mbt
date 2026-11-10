@@ -628,13 +628,23 @@ fn encode_user_data(
 
 ///|
 /// Maps a relative validity octet back to a duration.
+
+///|
+/// TP-VP in the relative format, 3GPP TS 23.040 §9.2.3.12.
+///
+/// The octet is split into four ranges, and only the first counts in fives:
+/// 0..143 is (n+1)*5 minutes, 144..167 is (n-143) half hours, 168..196 is
+/// (n-166) days and 197..255 is (n-192) weeks. Treating them as two ranges
+/// shifts everything past the first one.
 fn decode_relative_validity(raw : Int32) -> ValidityPeriod {
   if raw <= 143 {
     Relative((raw + 1) * 5)
   } else if raw <= 167 {
-    Relative((raw - 143) * 1440)
+    Relative((raw - 143) * 30)
+  } else if raw <= 196 {
+    Relative((raw - 167) * 1440)
   } else {
-    Relative((raw - 166) * 10080)
+    Relative((raw - 196) * 10080)
   }
 }
 
@@ -644,14 +654,24 @@ fn relative_validity(minutes : Int32) -> Byte raise SmsError {
   if minutes <= 0 {
     raise InvalidField("validity period must be positive")
   }
+  // Ranges are tested in order and each one covers a different unit, so the
+  // smaller unit has to be checked first or a day count would be read as weeks.
   if minutes <= 720 {
     return ((minutes + 4) / 5 - 1).to_byte()
   }
-  if minutes % 1440 == 0 && minutes / 1440 <= 24 {
-    return (144 + minutes / 1440 - 1).to_byte()
+  // Days before half hours: a whole day is also a multiple of thirty minutes,
+  // and the day range is the one that keeps the value exact for common inputs.
+  if minutes % 1440 == 0 && minutes / 1440 <= 29 {
+    // 168..196 holds one to twenty-nine days, so the offset is 167.
+    return (167 + minutes / 1440).to_byte()
   }
-  if minutes % 10080 == 0 && minutes / 10080 <= 63 {
-    return (192 + minutes / 10080 - 1).to_byte()
+  if minutes <= 1440 && minutes % 30 == 0 {
+    // 144..167 holds thirty minutes to twelve hours in half-hour steps.
+    return (143 + minutes / 30).to_byte()
+  }
+  if minutes % 10080 == 0 && minutes / 10080 <= 59 {
+    // 197..255 holds one to fifty-nine weeks.
+    return (196 + minutes / 10080).to_byte()
   }
   raise InvalidField("validity period does not fit the relative format")
 }
@@ -868,12 +888,9 @@ pub fn SmsSubmit::expires_at(
 /// Minutes a relative validity octet stands for. Duplicated logic is avoided by
 /// routing through the same decode the reader uses.
 fn decode_relative_minutes(raw : Int32) -> Int32 {
-  if raw <= 143 {
-    (raw + 1) * 5
-  } else if raw <= 167 {
-    (raw - 143) * 1440
-  } else {
-    (raw - 166) * 10080
+  match decode_relative_validity(raw) {
+    Relative(minutes) => minutes
+    _ => 0
   }
 }
 
