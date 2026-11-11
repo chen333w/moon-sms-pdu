@@ -288,7 +288,7 @@ pub fn Pdu::to_display(self : Pdu) -> String {
 ///|
 fn describe_validity(validity : ValidityPeriod) -> String {
   match validity {
-    Default => "smSC default"
+    Default => "SMSC default"
     Relative(minutes) => "\{minutes} minutes"
     RelativeRaw(raw) => "raw octet \{raw}"
     Absolute(stamp) => stamp.to_display()
