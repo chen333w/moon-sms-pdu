@@ -70,7 +70,7 @@ fn print_usage() -> Unit {
   println("sms-pdu — SMS PDU codec")
   println("")
   println(
-    "  decode <hex>              decode an SMS-DELIVER, SUBMIT or STATUS-REPORT",
+    "  decode <hex>              decode a deliver, submit, status report or command",
   )
   println("  encode <number> <text>    build an SMS-SUBMIT PDU")
   println("  parts <number> <text>     split a long message into PDUs")
