@@ -85,10 +85,14 @@ pub fn build_submits(
   encoding? : Encoding,
 ) -> Array[SmsSubmit] raise SmsError {
   let encoding = encoding.unwrap_or(Gsm7)
-  let parts = split_text(text, encoding)
-  if parts.length() == 1 {
-    return [SmsSubmit::new(destination, parts[0], encoding~)]
+  // A message that fits one part carries no header at all. Splitting first and
+  // checking the part count second gets this backwards: a 160 septet message
+  // is too long for a 153 septet concatenated part, so it would arrive as two
+  // halves even though a single message would have held it.
+  if fits_single(text, encoding) {
+    return [SmsSubmit::new(destination, text, encoding~)]
   }
+  let parts = split_text(text, encoding)
   guard parts.length() <= 255 else {
     raise InvalidField("message needs more than 255 parts")
   }
@@ -140,4 +144,21 @@ pub fn assemble(parts : Array[SmsDeliver]) -> String? {
     }
   }
   Some(buf.to_string())
+}
+
+///|
+/// Whether the text fits in one message with no user data header.
+///
+/// The limits are 160 septets for GSM 7-bit and 140 octets for the other two,
+/// which is the number `length` reports and the number a handset sees.
+pub fn fits_single(text : StringView, encoding : Encoding) -> Bool {
+  match encoding {
+    Gsm7 => {
+      let septets = gsm7_septet_length(text)
+      septets >= 0 && septets <= single_capacity(Gsm7)
+    }
+    // UCS-2 counts octets, two per UTF-16 code unit.
+    Ucs2 => text.char_length() * 2 <= single_capacity(Ucs2)
+    EightBit => text.char_length() <= single_capacity(EightBit)
+  }
 }

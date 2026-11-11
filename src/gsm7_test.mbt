@@ -46,9 +46,13 @@ test "gsm7 packing with a header offset shifts the stream" {
 test "gsm7 fit_septets follows the truncation rule" {
   // 160 septets fit exactly in 140 octets with no header.
   inspect(gsm7_fit_septets(140, 0), content="160")
-  // With a six octet header the fill is six bits, so 140 octets hold 159
-  // septets, of which the six header septets leave 153 for text.
+  // The second argument is fill bits, not octets. A six octet header ends six
+  // bits into a septet, leaving 1114 bits and room for 159 septets, of which
+  // the header's own seven septets leave 152 for text.
   inspect(gsm7_fit_septets(140, 6), content="159")
+  inspect(gsm7_fit_septets(140, 6) - 7, content="152")
+  // A header that ends exactly on a septet boundary pads by one bit instead.
+  inspect(header_fill_bits(6), content="1")
   inspect(gsm7_fit_septets(140, 6) - 6, content="153")
 }
 
