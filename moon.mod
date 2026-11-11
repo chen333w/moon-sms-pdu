@@ -3,7 +3,7 @@
 
 name = "chen333w/moon-sms-pdu"
 
-version = "0.6.2"
+version = "0.6.3"
 
 readme = "README.mbt.md"
 
