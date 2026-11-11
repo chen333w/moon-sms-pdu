@@ -33,10 +33,12 @@ test "digit classification follows the trunk and access prefixes" {
   inspect(type_, content="international")
   inspect(plan, content="isdn")
   inspect(digits, content="8613800138000")
+  // The national trunk prefix stays: it is part of the number, and removing
+  // it would deliver to a different subscriber.
   let (type_, plan, digits) = @src.classify_digits("013800138000")
   inspect(type_, content="national")
   inspect(plan, content="isdn")
-  inspect(digits, content="13800138000")
+  inspect(digits, content="013800138000")
   let (type_, plan, digits) = @src.classify_digits("13800138000")
   inspect(type_, content="national")
   inspect(plan, content="isdn")

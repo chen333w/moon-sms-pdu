@@ -225,13 +225,17 @@ pub fn read_address(
 pub fn classify_digits(
   digits : StringView,
 ) -> (NumberType, NumberingPlan, String) {
+  // `00` is an international access code, not part of the number: keeping it
+  // would make the receiver dial +0086..., which routes nowhere. The leading
+  // `0` of a national number is different - it belongs to the number, and
+  // dropping it would deliver the message to somebody else.
   if digits.has_prefix("00") && digits.char_length() > 4 {
-    return (International, Isdn, digits[2:].to_owned())
+    (International, Isdn, digits[2:].to_owned())
+  } else if digits.has_prefix("0") && digits.char_length() > 2 {
+    (National, Isdn, digits.to_owned())
+  } else {
+    (National, Isdn, digits.to_owned())
   }
-  if digits.has_prefix("0") && digits.char_length() > 2 {
-    return (National, Isdn, digits[1:].to_owned())
-  }
-  (National, Isdn, digits.to_owned())
 }
 
 ///|
