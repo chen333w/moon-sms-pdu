@@ -56,6 +56,25 @@ fn compare_octets(
 }
 
 ///|
+/// What an audit pass found, including how much it looked at.
+///
+/// The count matters: an empty capture and a clean capture both produce no
+/// problems, and reporting "all good" for a file with nothing in it is worse
+/// than saying nothing.
+pub(all) struct AuditReport {
+  checked : Int32
+  problems : Array[String]
+}
+
+///|
+/// Runs `round_trip` over a batch.
+pub fn audit(text : StringView) -> AuditReport {
+  let problems = audit_lines(text)
+  let checked = parse_pdu_lines(text).0.length()
+  { checked, problems, }
+}
+
+///|
 /// Runs `round_trip` over a batch and returns only the ones that are not
 /// identical, paired with their original hex.
 pub fn audit_lines(text : StringView) -> Array[String] {

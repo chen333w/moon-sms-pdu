@@ -227,11 +227,13 @@ fn stats_cmd(parts : Array[String]) -> Unit {
 
 ///|
 fn verify_cmd(parts : Array[String]) -> Unit {
-  let problems = @lib.audit_lines(collect(parts))
-  if problems.length() == 0 {
-    println("all pdus round-trip identically")
+  let report = @lib.audit(collect(parts))
+  if report.checked == 0 && report.problems.length() == 0 {
+    println("no pdus to check")
+  } else if report.problems.length() == 0 {
+    println("\{report.checked} pdu(s) round-trip identically")
   } else {
-    for problem in problems {
+    for problem in report.problems {
       println(problem)
     }
   }
