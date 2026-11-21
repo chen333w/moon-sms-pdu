@@ -1,5 +1,6 @@
 ///|
 /// What a round-trip check found.
+#derive(Eq, @debug.Debug)
 pub(all) enum RoundTripResult {
   /// Decoding and re-encoding produced the same octets.
   Identical
@@ -7,7 +8,7 @@ pub(all) enum RoundTripResult {
   Mismatch(Int32, Byte, Byte)
   /// The PDU could not be decoded at all.
   Undecodable(String)
-} derive(Eq, @debug.Debug)
+}
 
 ///|
 /// Decodes a PDU and encodes it again, then compares the two.

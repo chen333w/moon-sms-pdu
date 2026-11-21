@@ -36,7 +36,7 @@ test "every command type survives encode and decode" {
     let hex = @src.Pdu::Command(command).to_hex()
     match @src.parse_pdu(hex) {
       @src.Command(back) => {
-        inspect(back.command_type, content=kind.to_string())
+        inspect(back.command_type, content=Show::to_string(kind))
         inspect(@src.Pdu::Command(back).to_hex(), content=hex)
       }
       _ => fail("expected an sms-command")
@@ -88,7 +88,7 @@ test "pid round-trips through every range" {
   ]
   for pid in pids {
     let octet = @src.encode_pid(pid)
-    inspect(@src.decode_pid(octet.to_int()), content=pid.to_string())
+    inspect(@src.decode_pid(octet.to_int()), content=Show::to_string(pid))
   }
 }
 

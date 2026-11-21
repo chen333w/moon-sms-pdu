@@ -3,7 +3,7 @@ test "a plus prefix decodes to an international number" {
   let address = @src.Number(@src.International, @src.Isdn, "31624000000")
   let octets = address.to_octets()
   // 0x91 is "international, ISDN"; the digits are swapped nibbles.
-  inspect(octets[1], content="b'\\x91'")
+  inspect(octets[1].to_int(), content="145")
   let (back, next) = @src.read_address(octets, 0)
   inspect(back.to_string_display(), content="+31624000000")
   inspect(next, content="8")
@@ -13,8 +13,8 @@ test "a plus prefix decodes to an international number" {
 test "an odd number of digits pads the last semi-octet with f" {
   let address = @src.Number(@src.International, @src.Isdn, "1234567")
   let octets = address.to_octets()
-  inspect(octets[0], content="b'\\x07'")
-  inspect(octets[5], content="b'\\xF7'")
+  inspect(octets[0].to_int(), content="7")
+  inspect(octets[5].to_int(), content="247")
   let (back, _) = @src.read_address(octets, 0)
   inspect(back.to_string_display(), content="+1234567")
 }
@@ -72,5 +72,5 @@ test "twenty digits is the boundary and still encodes" {
     "12345678901234567890",
   )
   let octets = longest.to_octets() catch { e => fail(e.to_message()) }
-  inspect(octets[0], content="b'\\x14'")
+  inspect(octets[0].to_int(), content="20")
 }

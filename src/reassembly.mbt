@@ -14,6 +14,7 @@ pub(all) struct ReassemblyBuffer {
 
 ///|
 /// One message being reassembled.
+#derive(Eq, @debug.Debug)
 pub(all) struct PendingMessage {
   reference : Int32
   total : Int32
@@ -22,10 +23,11 @@ pub(all) struct PendingMessage {
   /// When the first part of this message was seen, in seconds since the epoch.
   started_at : UInt64
   originating : String
-} derive(Eq, @debug.Debug)
+}
 
 ///|
 /// What `ReassemblyBuffer::push` produced.
+#derive(Eq, @debug.Debug)
 pub(all) enum PushResult {
   /// The part was filed; more are still missing.
   Pending(Int32, Int32)
@@ -37,7 +39,7 @@ pub(all) enum PushResult {
   Single(String)
   /// The part contradicts what is already buffered, so it was refused.
   Rejected(String)
-} derive(Eq, @debug.Debug)
+}
 
 ///|
 /// Builds an empty buffer.

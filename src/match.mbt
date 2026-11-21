@@ -6,12 +6,13 @@
 /// `008613800138000` from a gateway. Matching them fails unless the comparison
 /// strips the furniture first, and doing that per call site is how off-by-one
 /// bugs get into address books.
+#derive(Eq, @debug.Debug)
 pub(all) struct PhoneKey {
   /// Digits only, with the international prefix removed.
   national : String
   /// Digits only, with the country code kept as written.
   full : String
-} derive(Eq, @debug.Debug)
+}
 
 ///|
 /// Builds the comparison keys for a dialled number.

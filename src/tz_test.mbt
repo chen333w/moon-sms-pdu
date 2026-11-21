@@ -23,7 +23,7 @@ test "negative zero keeps its sign bit" {
   let stamp = @src.read_timestamp(raw, 0) catch { e => fail(e.to_message()) }
   inspect(stamp.offset_minutes(), content="0")
   let back = stamp.to_octets() catch { e => fail(e.to_message()) }
-  inspect(back[6], content="b'\\x08'")
+  inspect(back[6].to_int(), content="8")
 }
 
 ///|

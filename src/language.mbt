@@ -9,6 +9,7 @@
 /// Only the tables that are defined in the standard appear here. A sender and
 /// receiver must agree on which table is in force; nothing in the message says
 /// so, which is why these are opt-in rather than automatic.
+#derive(Eq, @debug.Debug)
 pub(all) enum Language {
   /// No language table: escapes are the ones defined for everyone.
   Plain
@@ -18,7 +19,7 @@ pub(all) enum Language {
   Spanish
   /// Portuguese.
   Portuguese
-} derive(Eq, @debug.Debug)
+}
 
 ///|
 /// Characters a language adds, as (escape septet after 0x1B, character).

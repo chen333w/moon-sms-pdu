@@ -1,15 +1,17 @@
 ///|
 /// One Information Element of a user data header.
+#derive(Eq, @debug.Debug)
 pub(all) struct HeaderElement {
   id : Int32
   data : Array[Byte]
-} derive(Eq, @debug.Debug)
+}
 
 ///|
 /// A user data header: its elements, in wire order.
+#derive(Eq, @debug.Debug)
 pub(all) struct UserDataHeader {
   elements : Array[HeaderElement]
-} derive(Eq, @debug.Debug)
+}
 
 ///|
 /// Concatenation element with an 8-bit reference.
@@ -29,18 +31,20 @@ pub let iei_application_port_16bit : Int32 = 0x05
 
 ///|
 /// Where a part sits in a multi-part message.
+#derive(Eq, @debug.Debug)
 pub(all) struct Concatenation {
   reference : Int32
   total : Int32
   sequence : Int32
-} derive(Eq, @debug.Debug)
+}
 
 ///|
 /// Application port pair, as used by OTA provisioning and WAP push.
+#derive(Eq, @debug.Debug)
 pub(all) struct Ports {
   destination : Int32
   source : Int32
-} derive(Eq, @debug.Debug)
+}
 
 ///|
 /// Parses a header from the start of TP-UD. Returns the header and how many

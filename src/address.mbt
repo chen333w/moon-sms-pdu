@@ -1,5 +1,6 @@
 ///|
 /// Numbering plan (type-of-address bits 0..3), 3GPP TS 23.040 §9.1.2.5.
+#derive(Eq, @debug.Debug)
 pub(all) enum NumberingPlan {
   Unknown
   Isdn
@@ -9,10 +10,11 @@ pub(all) enum NumberingPlan {
   PrivateNumberingPlan
   Ermes
   Reserved
-} derive(Eq, @debug.Debug)
+}
 
 ///|
 /// Type of number (type-of-address bits 4..6).
+#derive(Eq, @debug.Debug)
 pub(all) enum NumberType {
   Unknown
   International
@@ -22,17 +24,18 @@ pub(all) enum NumberType {
   Alphanumeric
   Abbreviated
   Reserved
-} derive(Eq, @debug.Debug)
+}
 
 ///|
 /// A TP address: a phone number, or an alphanumeric string for the case where
 /// a sender has a name instead of a number.
+#derive(Eq, @debug.Debug)
 pub(all) enum Address {
   /// A dialable number with its plan and type.
   Number(NumberType, NumberingPlan, String)
   /// GSM 03.38 packed text, used by gateways and by sender headers.
   Alphanumeric(String)
-} derive(Eq, @debug.Debug)
+}
 
 ///|
 fn nibble_to_digit(n : Int32) -> Char {

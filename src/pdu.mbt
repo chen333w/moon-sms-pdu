@@ -1,5 +1,6 @@
 ///|
 /// TP-VP: how long the SMSC should keep trying.
+#derive(Eq, @debug.Debug)
 pub(all) enum ValidityPeriod {
   /// Let the SMSC apply its own default.
   Default
@@ -9,10 +10,11 @@ pub(all) enum ValidityPeriod {
   RelativeRaw(Int32)
   /// Absolute timestamp.
   Absolute(Timestamp)
-} derive(Eq, @debug.Debug)
+}
 
 ///|
 /// TP-ST of a status report.
+#derive(Eq, @debug.Debug)
 pub(all) enum StatusReportStatus {
   /// 0x00: delivered.
   Delivered
@@ -24,10 +26,11 @@ pub(all) enum StatusReportStatus {
   TemporaryUnknown(Int32)
   /// 0x80..: codes the standard leaves to the protocol, kept raw.
   Other(Int32)
-} derive(Eq, @debug.Debug)
+}
 
 ///|
 /// An SMS-SUBMIT: a message on its way to the SMSC.
+#derive(Eq, @debug.Debug)
 pub(all) struct SmsSubmit {
   message_reference : Int32
   destination : Address
@@ -40,6 +43,13 @@ pub(all) struct SmsSubmit {
   pid : ProtocolId
   text : String
   concatenation : Concatenation?
+  /// The user data header exactly as it goes on the wire.
+  ///
+  /// `concatenation` is the parsed convenience view of one element in here.
+  /// A message that also carries a port element has to keep the whole header,
+  /// or re-encoding drops ports the sender asked for. When `concatenation` is
+  /// set and this is `None`, the header is built from the concatenation.
+  header : UserDataHeader?
   /// Raw TP-UD used when `encoding` is `EightBit`.
   payload : Array[Byte]
   request_status_report : Bool
@@ -47,10 +57,11 @@ pub(all) struct SmsSubmit {
   reject_duplicates : Bool
   /// SMSC to relay through, when the caller wants to override the default.
   smsc : Address?
-} derive(Eq, @debug.Debug)
+}
 
 ///|
 /// An SMS-DELIVER: a message the SMSC handed to the handset.
+#derive(Eq, @debug.Debug)
 pub(all) struct SmsDeliver {
   originating : Address
   service_center : Address?
@@ -72,10 +83,11 @@ pub(all) struct SmsDeliver {
   no_more_messages : Bool
   status_report_indication : Bool
   reply_path : Bool
-} derive(Eq, @debug.Debug)
+}
 
 ///|
 /// An SMS-STATUS-REPORT.
+#derive(Eq, @debug.Debug)
 pub(all) struct StatusReport {
   message_reference : Int32
   recipient : Address
@@ -85,10 +97,11 @@ pub(all) struct StatusReport {
   status : StatusReportStatus
   no_more_messages : Bool
   reply_path : Bool
-} derive(Eq, @debug.Debug)
+}
 
 ///|
 /// What an SMS-COMMAND asks the SMSC to do with a stored message.
+#derive(Eq, @debug.Debug)
 pub(all) enum CommandType {
   /// 000: make the SMSC read a message back.
   ReadMessage
@@ -102,7 +115,7 @@ pub(all) enum CommandType {
   StatusEnquiry
   /// 101..111: reserved, kept raw so an unknown code still round-trips.
   Other(Int32)
-} derive(Eq, @debug.Debug)
+}
 
 ///|
 /// An SMS-COMMAND: TPDU type 10 with bit 1 clear.
@@ -111,6 +124,7 @@ pub(all) enum CommandType {
 /// command type and a little data describing the message it refers to.
 /// TP-VPF is always 00 here, so the 7-bit text behind it is not a message body
 /// but filler the sender put there.
+#derive(Eq, @debug.Debug)
 pub(all) struct SmsCommand {
   message_reference : Int32
   destination : Address
@@ -124,16 +138,17 @@ pub(all) struct SmsCommand {
   payload : Array[Byte]
   concatenation : Concatenation?
   smsc : Address?
-} derive(Eq, @debug.Debug)
+}
 
 ///|
 /// Any TP-DU this codec can read.
+#derive(Eq, @debug.Debug)
 pub(all) enum Pdu {
   Submit(SmsSubmit)
   Deliver(SmsDeliver)
   StatusReport(StatusReport)
   Command(SmsCommand)
-} derive(Eq, @debug.Debug)
+}
 
 // ---------------------------------------------------------------------------
 // Decoding
@@ -297,6 +312,7 @@ fn decode_submit(
       Some(h) => h.concatenation()
       None => None
     },
+    header,
     payload,
     request_status_report: (first & 0x20) != 0,
     reply_path: (first & 0x80) != 0,
@@ -360,16 +376,23 @@ fn decode_user_data(
       guard pos < octets.length() else { raise Truncated("user data header") }
       let header_octets = octets[pos].to_int() + 1
       let body_septets = udl - header_septets(header_octets)
-      let body_octets = (body_septets * 7 + 7) / 8
-      guard pos + header_octets + body_octets <= octets.length() else {
+      // The text does not start on an octet boundary when the header is not a
+      // whole number of septets. A six octet concatenation header ends two bits
+      // into the seventh octet, so the text begins two bits late. Unpacking
+      // from octet zero without that offset returns one character of header
+      // bits glued to the front of the message.
+      let fill = header_fill_bits(header_octets)
+      let total_bits = 8 * header_octets + fill + 7 * body_septets
+      let body_octets = (total_bits + 7) / 8
+      guard pos + body_octets <= octets.length() else {
         raise BadLength("gsm7 user data overruns the pdu")
       }
       let raw_header = octets[pos:pos + header_octets]
-      let (header, consumed) = UserDataHeader::parse(raw_header)
+      let (header, _) = UserDataHeader::parse(raw_header)
       let septets = gsm7_unpack(
-        octets[pos + consumed:pos + header_octets + body_octets],
+        octets[pos:pos + body_octets],
         body_septets,
-        0,
+        8 * header_octets + fill,
       )
       (gsm7_from_septets(septets), [], Some(header))
     } else {
@@ -424,6 +447,7 @@ pub fn SmsSubmit::new(
     pid: Assigned(0),
     text,
     concatenation: None,
+    header: None,
     payload: [],
     request_status_report: false,
     reply_path: false,
@@ -479,9 +503,13 @@ pub fn SmsSubmit::to_octets(self : SmsSubmit) -> Array[Byte] raise SmsError {
     RelativeRaw(raw) => out.push(raw.to_byte())
     Absolute(stamp) => out.append(stamp.to_octets())
   }
-  let header = match self.concatenation {
-    Some(concat) => Some(concatenation_header(concat))
-    None => None
+  let header = match self.header {
+    Some(h) => Some(h)
+    None =>
+      match self.concatenation {
+        Some(concat) => Some(concatenation_header(concat))
+        None => None
+      }
   }
   let (ud, udl) = encode_user_data(
     self.encoding,
@@ -593,11 +621,16 @@ fn encode_user_data(
           // TP-UDL is octets of header plus septets of text, and the header
           // itself occupies whole octets at the front of the field.
           let header_septet_count = header_septets(header_len)
+          // The header occupies whole octets, so when it is not a whole number
+          // of septets the text starts in the middle of the following octet.
+          // A receiver assumes exactly this padding; packing without it shifts
+          // every character and hands back header bits as the first letter.
+          let start_bit = header_len * 8 + header_fill_bits(header_len)
           let body_bits = 7 * text_septets.length()
-          let total = header_len + (body_bits + 7) / 8
+          let total = (start_bit + body_bits + 7) / 8
           let out = Array::make(total, b'\x00')
           write_bytes_at(out, 0, header_octets)
-          write_septets(out, 0, text_septets, header_len * 8)
+          write_septets(out, 0, text_septets, start_bit)
           (out, header_septet_count + text_septets.length())
         }
         None => (gsm7_pack(text_septets, 0), text_septets.length())
@@ -900,6 +933,7 @@ fn decode_relative_minutes(raw : Int32) -> Int32 {
 ///
 /// A report that comes back after the validity period is a curious case: the
 /// handset did get it, but a sender that already retried has now sent it twice.
+#derive(Eq, @debug.Debug)
 pub(all) enum DeliveryOutcome {
   /// Delivered inside the validity period.
   DeliveredOnTime
@@ -911,7 +945,7 @@ pub(all) enum DeliveryOutcome {
   Failed(Int32)
   /// The report does not map onto the codes the standard defines.
   Unknown(Int32)
-} derive(Eq, @debug.Debug)
+}
 
 ///|
 /// Classifies a status report against the submit it refers to.

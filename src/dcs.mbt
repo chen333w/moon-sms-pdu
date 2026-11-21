@@ -1,5 +1,6 @@
 ///|
 /// The alphabet carrying TP-UD, derived from TP-DCS.
+#derive(Eq, @debug.Debug)
 pub(all) enum Encoding {
   /// GSM 03.38 default alphabet, packed into septets.
   Gsm7
@@ -7,7 +8,7 @@ pub(all) enum Encoding {
   EightBit
   /// UTF-16BE, two octets per code unit.
   Ucs2
-} derive(Eq, @debug.Debug)
+}
 
 ///|
 /// TP-DCS message class, 3GPP TS 23.038 §4.
@@ -15,6 +16,7 @@ pub(all) enum Encoding {
 /// Class 0 is the "flash" SMS: handsets display it straight away and usually
 /// do not file it in the inbox. That distinction matters to anything that
 /// counts messages, so it is surfaced rather than dropped.
+#derive(Eq, @debug.Debug)
 pub(all) enum MessageClass {
   /// Class 0: display immediately, do not store.
   Flash
@@ -24,19 +26,21 @@ pub(all) enum MessageClass {
   Sim
   /// Class 3: terminal equipment, typically forwarded over a serial link.
   Terminal
-} derive(Eq, @debug.Debug)
+}
 
 ///|
 /// The kinds carried by a message-waiting indication group.
+#derive(Eq, @debug.Debug)
 pub(all) enum MessageWaiting {
   Voicemail
   Fax
   Email
   Other
-} derive(Eq, @debug.Debug)
+}
 
 ///|
 /// A decoded TP-DCS octet.
+#derive(Eq, @debug.Debug)
 pub(all) struct DataCodingScheme {
   encoding : Encoding
   /// Set when the user data is compressed. The codec does not decompress:
@@ -46,7 +50,7 @@ pub(all) struct DataCodingScheme {
   class : MessageClass?
   /// Set by the message-waiting groups.
   waiting : MessageWaiting?
-} derive(Eq, @debug.Debug)
+}
 
 ///|
 /// Decodes a TP-DCS octet, 3GPP TS 23.038 §4.

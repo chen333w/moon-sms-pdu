@@ -6,6 +6,7 @@
 /// number: 2948 is a WAP push and has to be handed to the browser, 4996 is
 /// device management and must not be. A codec that decodes the text and drops
 /// the port has thrown away the only thing that said what to do with it.
+#derive(Eq, @debug.Debug)
 pub(all) enum ApplicationPort {
   /// WAP push, 16-bit ports 2948 receiving from 9200..9203.
   WapPush
@@ -21,7 +22,7 @@ pub(all) enum ApplicationPort {
   SimUpdate
   /// Anything else, kept as the pair it arrived as.
   Other(Int32, Int32)
-} derive(Eq, @debug.Debug)
+}
 
 ///|
 /// Names the application a port pair belongs to.

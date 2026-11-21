@@ -30,7 +30,7 @@ test "a national address keeps every digit it was given" {
   let address = @src.Number(@src.National, @src.Isdn, "013800138000")
   let octets = address.to_octets() catch { e => fail(e.to_message()) }
   // Twelve digits, so the length octet says twelve and no digit is lost.
-  inspect(octets[0], content="b'\\x0C'")
+  inspect(octets[0].to_int(), content="12")
   let (back, _) = @src.read_address(octets, 0) catch {
     e => fail(e.to_message())
   }

@@ -31,7 +31,7 @@ test "the encoded year octet is the last two digits" {
   let stamp = @src.timestamp_unchecked(2024, 3, 1, 10, 0, 0, 0)
   let octets = stamp.to_octets() catch { e => fail(e.to_message()) }
   // 2024 is written as swapped BCD "24", which is 0x42.
-  inspect(octets[0], content="b'\\x42'")
+  inspect(octets[0].to_int(), content="66")
 }
 
 ///|

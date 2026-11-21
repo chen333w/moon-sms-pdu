@@ -1,5 +1,6 @@
 ///|
 /// Errors surfaced by the PDU codec.
+#derive(@debug.Debug)
 pub suberror SmsError {
   /// The input ended before the field being read was complete.
   Truncated(String)
@@ -11,7 +12,7 @@ pub suberror SmsError {
   NotEncodable(String)
   /// A user data field did not match its declared length.
   BadLength(String)
-} derive(@debug.Debug)
+}
 
 ///|
 pub impl Show for SmsError with fn to_string(self) {

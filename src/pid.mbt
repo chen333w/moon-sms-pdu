@@ -3,6 +3,7 @@
 ///
 /// The first two bits decide how the octet is read, so the three ranges below
 /// are not interchangeable even when their numeric values overlap.
+#derive(Eq, @debug.Debug)
 pub(all) enum ProtocolId {
   /// 00xxxxxx: the SMSC assigns a protocol.
   Assigned(Int32)
@@ -12,10 +13,11 @@ pub(all) enum ProtocolId {
   Telematic(TelematicDevice, TelematicSme?)
   /// 11xxxxxx: SC-specific protocol, taken from the SMSC's own numbering.
   ScSpecific(Int32)
-} derive(Eq, @debug.Debug)
+}
 
 ///|
 /// The message types carried by an `01` TP-PID.
+#derive(Eq, @debug.Debug)
 pub(all) enum SmsMessageType {
   /// 00000: a normal short message.
   ShortMessage
@@ -25,10 +27,11 @@ pub(all) enum SmsMessageType {
   SmeSpecific(Int32)
   /// 00100: the SMSC is asking the SIM to start a data download.
   SimDataDownload
-} derive(Eq, @debug.Debug)
+}
 
 ///|
 /// Telematic device a message is meant for, from the low bits of an `10` TP-PID.
+#derive(Eq, @debug.Debug)
 pub(all) enum TelematicDevice {
   Implicit
   Teletex
@@ -40,15 +43,16 @@ pub(all) enum TelematicDevice {
   Videotex
   Telex
   MessageHandling
-} derive(Eq, @debug.Debug)
+}
 
 ///|
 /// The optional second telematic device, used when a message goes between two
 /// different kinds of terminal.
+#derive(Eq, @debug.Debug)
 pub(all) enum TelematicSme {
   SmeA
   SmeB
-} derive(Eq, @debug.Debug)
+}
 
 ///|
 /// Decodes a TP-PID octet.

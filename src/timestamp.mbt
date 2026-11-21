@@ -6,6 +6,7 @@
 /// until you meet a real SMSC: the sign lives in bit 3, so `0x08` means
 /// "zero offset, negative", which a plain integer offset would silently rewrite
 /// to `0x00`. Keeping the octet makes re-encoding byte for byte identical.
+#derive(Eq, @debug.Debug)
 pub(all) struct Timestamp {
   year : Int32
   month : Int32
@@ -14,7 +15,7 @@ pub(all) struct Timestamp {
   minute : Int32
   second : Int32
   tz_raw : Int32
-} derive(Eq, @debug.Debug)
+}
 
 ///|
 /// Builds a timestamp from calendar fields and an offset in minutes. The offset

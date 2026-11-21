@@ -35,7 +35,7 @@ test "encoding and class survive a dcs round-trip" {
   let scheme = @src.decode_dcs(dcs.to_int())
   inspect(scheme.encoding, content="UCS-2")
   inspect(scheme.class.unwrap(), content="class 0 (flash)")
-  inspect(dcs, content="b'\\x18'")
+  inspect(dcs.to_int(), content="24")
 }
 
 ///|

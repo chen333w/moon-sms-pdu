@@ -22,19 +22,19 @@ let gsm7_escape : Int32 = 0x1B
 /// The extension table is sparse: only the positions below are assigned by
 /// 3GPP TS 23.038 §6.2.1.1.
 let gsm7_extension_table : Array[(Int32, Char)] = [
-  (0, '@'),
+  // 3GPP TS 23.038 §6.2.1.1, the only ten positions escape 0x1B defines.
+  // A character that is not here is not encodable and must not be quietly
+  // mapped to a default-table position instead.
   (10, '\f'),
-  (13, '\r'),
-  (17, '_'),
   (20, '^'),
-  (30, '{'),
-  (40, '|'),
+  (40, '{'),
   (41, '}'),
   (47, '\\'),
-  (49, '['),
-  (50, '~'),
-  (57, ']'),
-  (60, '€'),
+  (60, '['),
+  (61, '~'),
+  (62, ']'),
+  (64, '|'),
+  (101, '€'),
 ]
 
 ///|

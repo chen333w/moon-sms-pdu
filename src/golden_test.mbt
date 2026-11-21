@@ -35,7 +35,7 @@ test "an ordinary submit leaves tp-pid at zero" {
   )
   // Octets 0..2 are SMSC, type and mr; 3..9 are the address; PID follows.
   let octets = @src.Pdu::Submit(submit).to_octets()
-  inspect(octets[10], content="b'\\x00'")
+  inspect(octets[10].to_int(), content="0")
   inspect(submit.pid, content="assigned (0)")
 }
 

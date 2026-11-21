@@ -80,12 +80,13 @@ pub fn at_ussd(code : String) -> String {
 
 ///|
 /// A message the modem reported, with the slot it occupies.
+#derive(Eq, @debug.Debug)
 pub(all) struct ModemMessage {
   index : Int32
   /// The `stat` field the modem used, such as `REC UNREAD`.
   status : String
   pdu : Pdu
-} derive(Eq, @debug.Debug)
+}
 
 ///|
 /// Reads a `+CMGL` response.

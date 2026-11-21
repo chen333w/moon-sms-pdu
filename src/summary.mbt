@@ -31,6 +31,7 @@ pub fn Pdu::summary(self : Pdu) -> String {
 
 ///|
 /// Counters over a batch of PDUs.
+#derive(Eq, @debug.Debug)
 pub(all) struct PduStats {
   mut total : Int32
   mut submits : Int32
@@ -47,7 +48,7 @@ pub(all) struct PduStats {
   mut concatenated_parts : Int32
   /// Status reports that did not say "delivered".
   mut failed_reports : Int32
-} derive(Eq, @debug.Debug)
+}
 
 ///|
 /// Builds an empty tally.
