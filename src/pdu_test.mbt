@@ -1,6 +1,6 @@
 ///|
-/// A well-known SMS-DELIVER from the 3GPP TS 23.040 examples: "hellohello" sent
-/// from +447785016005 to a handset.
+/// A well-known SMS-DELIVER from the 3GPP TS 23.040 examples: "How are you?"
+/// from +31641600986, delivered 2002-08-26 through the Dutch SMSC.
 test "decode a gsm7 sms-deliver" {
   let pdu = @src.parse_pdu(
     "07911326040000F0040B911346610089F60000208062917314080CC8F71D14969741F977FD07",
